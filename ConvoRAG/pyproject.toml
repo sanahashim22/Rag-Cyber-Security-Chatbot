@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "convorag"
+version = "0.1.0"
+description = "Cybersecurity Standards ConvoRAG — A conversational RAG system for multi-turn Q&A about cybersecurity frameworks like NIST CSF 2.0."
+authors = ["Abdul Haseeb"]
+license = "{ file = \"LICENSE\" }"
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+numpy = "^2.2.2"
+ollama = "^0.4.7"
+streamlit = "^1.42.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "ragstream"
+version = "1.0.0"
+description = "Cybersecurity Standards Assistant — A RAG-powered system for querying cybersecurity frameworks like NIST CSF 2.0. Built with Streamlit and Ollama for local, private, offline-capable cybersecurity Q&A."
+authors = ["Abdul Haseeb"]
+license = "MIT"
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+numpy = "^2.2.4"
+streamlit = "^1.43.2"
+ollama = "^0.4.7"
+pdfplumber = "^0.11.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

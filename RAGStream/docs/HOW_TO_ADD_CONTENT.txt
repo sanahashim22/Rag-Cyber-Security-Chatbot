@@ -1,0 +1,35 @@
+# HOW TO ADD NEW CYBERSECURITY CONTENT TO THE SYSTEM
+# =====================================================
+#
+# This folder is where you put all your cybersecurity documents.
+# The RAGStream app will automatically load everything in this folder
+# when it starts up.
+#
+# SUPPORTED FILE TYPES:
+#   - PDF  (.pdf)  — e.g., your NIST CSF 2.0 document
+#   - Text (.txt)  — plain text documents
+#
+# STEPS TO ADD A NEW DOCUMENT:
+#
+#   STEP 1: Copy your PDF or TXT file into this folder (RAGStream/docs/)
+#
+#   STEP 2: Go to the RAGStream app in your browser
+#
+#   STEP 3: Click "Restart Conversation" in the sidebar
+#           (This makes the app reload and pick up the new document)
+#
+#   STEP 4: Start asking questions — the system now knows your new content!
+#
+# EXAMPLE:
+#   You receive a new PDF from your instructor called "ISO_27001.pdf"
+#   Just copy it here: RAGStream/docs/ISO_27001.pdf
+#   Restart the app → Done!
+#
+# NOTE:
+#   - You can have MULTIPLE files at the same time (all will be loaded together)
+#   - File names don't matter, just make sure the extension is .pdf or .txt
+#   - If a file fails to load, the app will warn you but continue with others
+#
+# =====================================================
+# PLACE YOUR DOCUMENT FILES IN THIS FOLDER
+# =====================================================
