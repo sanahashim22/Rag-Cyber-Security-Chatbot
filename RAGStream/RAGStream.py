@@ -5,11 +5,21 @@ import ollama
 import time
 import re
 import os
+import json
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Tuple, Any, Iterator, Union
 from datetime import datetime
 from memory_monitor import render_memory_bar
 from load_documents import load_all_from_docs_folder, load_uploaded_file, list_loaded_documents
+import snort_ranking
+
+# Batch size and per-request character cap for embedding calls during the
+# (one-time, cached in chroma_db) knowledge-base indexing pass. Batching
+# turns thousands of individual Ollama HTTP calls into a much smaller
+# number of batched calls - see ConvoRAG.__init__.
+EMBED_BATCH_SIZE = 32
+MAX_EMBED_CHARS = 3000
 
 
 # OLLAMA_HOST = "https://recipient-duty-untwist.ngrok-free.dev"
@@ -18,7 +28,14 @@ from load_documents import load_all_from_docs_folder, load_uploaded_file, list_l
 #     headers={"ngrok-skip-browser-warning": "true"}
 # )
 
-ollama_client = ollama.Client(host="http://localhost:11434")
+# timeout=180: the ollama python client has NO request timeout by default
+# (it wraps httpx with an unbounded read timeout), so a model that gets
+# stuck - e.g. a small model struggling to satisfy strict JSON-format
+# grammar under greedy decoding - can otherwise hang a call forever with
+# nothing to cut it off. 180s is generous for any normal call; past that,
+# something is genuinely stuck and should fail (and get retried/defaulted)
+# rather than freeze the whole app.
+ollama_client = ollama.Client(host="http://localhost:11434", timeout=180)
 
 # Try to import advanced libraries for DB and Hybrid Search
 try:
@@ -131,31 +148,79 @@ class ConvoRAG:
                 needs_rebuild = (existing_count == 0 or existing_count != len(self.documents) or stored_hash != doc_hash)
                 
                 if needs_rebuild:
-                    st.write("Generating and storing new embeddings in the database...")
+                    st.write(f"Generating and storing new embeddings for {len(documents)} chunks (batched)...")
                     # Recreate collection to wipe old contents
                     try:
                         self.chroma_client.delete_collection(name="cyber_standards")
                     except Exception:
                         pass
-                    
+
                     self.collection = self.chroma_client.create_collection(
                         name="cyber_standards",
                         metadata={"hnsw:space": "cosine", "doc_hash": doc_hash}
                     )
-                    
-                    # Generate embeddings
-                    for i, doc in enumerate(documents):
+
+                    # Embed in batches (one HTTP call per batch instead of per
+                    # chunk) with a few batches in flight at once - with
+                    # thousands of chunks (e.g. after adding Snort rule docs
+                    # to docs/), one-call-per-chunk would take hours.
+                    indexed_documents = list(enumerate(documents))
+                    batches = [
+                        indexed_documents[start:start + EMBED_BATCH_SIZE]
+                        for start in range(0, len(documents), EMBED_BATCH_SIZE)
+                    ]
+
+                    def embed_batch(batch):
+                        indices = [i for i, _ in batch]
+                        full_texts = [doc for _, doc in batch]
+                        embed_inputs = [doc[:MAX_EMBED_CHARS] for _, doc in batch]
+                        errors = []
                         try:
-                            # We still use Ollama for embedding generation to keep it consistent
-                            response = ollama_client.embeddings(model=self.embedding_model, prompt=doc)
-                            self.collection.add(
-                                embeddings=[response["embedding"]],
-                                documents=[doc],
-                                metadatas=[{"chunk_id": i}],
-                                ids=[f"chunk_{doc_hash}_{i}"]
-                            )
-                        except Exception as e:
-                            st.error(f"Error embedding chunk {i}: {str(e)}")
+                            response = ollama_client.embed(model=self.embedding_model, input=embed_inputs)
+                            embeddings = response["embeddings"]
+                            if len(embeddings) != len(embed_inputs):
+                                raise ValueError("Ollama returned the wrong number of embeddings")
+                            return list(zip(indices, full_texts, embeddings)), errors
+                        except Exception:
+                            # Batch call failed (e.g. one oversized chunk) -
+                            # fall back to embedding this batch one at a time
+                            # so we don't lose the whole batch.
+                            results = []
+                            for idx, full_text, embed_text in zip(indices, full_texts, embed_inputs):
+                                try:
+                                    resp = ollama_client.embeddings(model=self.embedding_model, prompt=embed_text)
+                                    results.append((idx, full_text, resp["embedding"]))
+                                except Exception as e:
+                                    # Collect instead of calling st.error() here directly -
+                                    # this runs in a ThreadPoolExecutor worker thread, and
+                                    # Streamlit UI calls from non-main threads are silently
+                                    # dropped (no ScriptRunContext). Report from the main
+                                    # thread once this batch's future resolves, below.
+                                    errors.append((idx, str(e)))
+                            return results, errors
+
+                    progress_bar = st.progress(0.0)
+                    progress_text = st.empty()
+                    completed = 0
+
+                    with ThreadPoolExecutor(max_workers=4) as executor:
+                        for batch_result, batch_errors in executor.map(embed_batch, batches):
+                            if batch_result:
+                                self.collection.add(
+                                    embeddings=[e for _, _, e in batch_result],
+                                    documents=[d for _, d, _ in batch_result],
+                                    metadatas=[{"chunk_id": i} for i, _, _ in batch_result],
+                                    ids=[f"chunk_{doc_hash}_{i}" for i, _, _ in batch_result],
+                                )
+                            for idx, err_msg in batch_errors:
+                                st.error(f"Error embedding chunk {idx}: {err_msg}")
+                            completed += EMBED_BATCH_SIZE
+                            fraction = min(1.0, completed / len(documents))
+                            progress_bar.progress(fraction)
+                            progress_text.write(f"Embedded ~{min(completed, len(documents))}/{len(documents)} chunks...")
+
+                    progress_bar.empty()
+                    progress_text.empty()
                             
                 # Initialize BM25 for Keyword Search
                 # We use regex to strip out punctuation like parentheses so (PR.DS) matches pr.ds
@@ -832,6 +897,16 @@ def initialize_session_state():
         st.session_state.loaded_doc_names = []
     if "search_mode" not in st.session_state:
         st.session_state.search_mode = "hybrid"  # "hybrid" or "vector"
+    if "predefined_rules" not in st.session_state:
+        try:
+            st.session_state.predefined_rules = snort_ranking.load_predefined_rules()
+        except Exception as e:
+            st.session_state.predefined_rules = []
+            st.warning(f"Could not load predefined_rules.json: {e}")
+    if "pending_alert_entries" not in st.session_state:
+        st.session_state.pending_alert_entries = None
+    if "awaiting_alert_confirmation" not in st.session_state:
+        st.session_state.awaiting_alert_confirmation = False
 
 
 SEARCH_MODE_LABELS = {
@@ -842,22 +917,173 @@ SEARCH_MODE_LABELS = {
 
 def display_chat_messages():
     """Display all messages in the chat history."""
-    for message in st.session_state.messages:
+    for idx, message in enumerate(st.session_state.messages):
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
             if message["role"] == "assistant" and message.get("search_mode"):
                 st.caption(f"Retrieved with: {SEARCH_MODE_LABELS.get(message['search_mode'], message['search_mode'])}")
+            if message["role"] == "assistant" and message.get("report_text"):
+                st.download_button(
+                    "⬇️ Download full ranking report (.txt)",
+                    data=message["report_text"],
+                    file_name=f"snort_ranking_report_{idx}.txt",
+                    mime="text/plain",
+                    key=f"download_report_{idx}",
+                )
 
 
-def handle_user_input():
-    """Process user input from the chat interface."""
-    prompt = st.chat_input("Ask a question about cybersecurity standards (e.g., NIST CSF 2.0):")
-    if prompt:
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-        return prompt
-    return None
+def handle_user_input() -> Tuple[str, list]:
+    """Process user input from the chat interface, including an optional
+    attached file via the native '+' attach icon (ChatGPT/Claude-style).
+    Returns (text, files) - both may be empty if nothing was submitted."""
+    chat_value = st.chat_input(
+        "Ask a question about cybersecurity standards, or attach a Snort alerts JSON file to rank it...",
+        accept_file=True,
+        file_type=["json"],
+    )
+    if not chat_value:
+        return "", []
+
+    text = (chat_value.text or "").strip()
+    files = chat_value.files or []
+
+    if text:
+        display_text = text
+    elif files:
+        display_text = "📎 Uploaded file: " + ", ".join(f.name for f in files)
+    else:
+        return "", []
+
+    st.session_state.messages.append({"role": "user", "content": display_text})
+    with st.chat_message("user"):
+        st.markdown(display_text)
+
+    return text, files
+
+
+def handle_alert_file_upload(files, ranking_model: str):
+    """Parses an uploaded file as a Snort alerts JSON, auto-detects it (no
+    special prompt needed), and either processes it immediately (<=10
+    alerts) or asks the user to confirm how many to process (>10 alerts)."""
+    raw_bytes = files[0].getvalue()
+    try:
+        data = json.loads(raw_bytes.decode("utf-8", errors="ignore"))
+    except Exception as e:
+        with st.chat_message("assistant"):
+            error_msg = f"⚠️ Could not parse `{files[0].name}` as JSON: {e}"
+            st.markdown(error_msg)
+        st.session_state.messages.append({"role": "assistant", "content": error_msg})
+        return
+
+    if not snort_ranking.is_snort_alerts_payload(data):
+        with st.chat_message("assistant"):
+            error_msg = (
+                f"⚠️ `{files[0].name}` doesn't look like a Snort alerts file "
+                "(expected fields like `sid`, `priority`, or an `alerts` list). "
+                "Please upload a Snort/Suricata alerts JSON export."
+            )
+            st.markdown(error_msg)
+        st.session_state.messages.append({"role": "assistant", "content": error_msg})
+        return
+
+    entries = snort_ranking.extract_alert_entries(data)
+    if not entries:
+        with st.chat_message("assistant"):
+            error_msg = f"⚠️ `{files[0].name}` was recognized as a Snort alerts file but contained no alerts."
+            st.markdown(error_msg)
+        st.session_state.messages.append({"role": "assistant", "content": error_msg})
+        return
+
+    if len(entries) <= 10:
+        process_alerts_and_respond(entries, ranking_model)
+    else:
+        st.session_state.pending_alert_entries = entries
+        st.session_state.awaiting_alert_confirmation = True
+        confirm_msg = (
+            f"This file has **{len(entries)} alerts**. Processing all of them with 3 "
+            "repeats per alert will take a while on a local model.\n\n"
+            "Enter how many alerts to process below and press Enter, or click "
+            "**Process all** to process the entire file."
+        )
+        st.session_state.messages.append({"role": "assistant", "content": confirm_msg})
+        # Rerun immediately so render_alert_confirmation_ui's number-input +
+        # buttons (gated on awaiting_alert_confirmation) appear together with
+        # this message on the very next script pass, instead of waiting for
+        # the user's next unrelated interaction to trigger it.
+        st.rerun()
+
+
+def process_alerts_and_respond(entries: list, ranking_model: str):
+    """Runs the 3x-repeat ranking pipeline over `entries` and posts the
+    formatted result (plus a .txt download) as an assistant chat message."""
+    rules = st.session_state.predefined_rules
+    rag_system = st.session_state.rag_system
+
+    with st.chat_message("assistant"):
+        status_placeholder = st.empty()
+        processed = []
+        total = len(entries)
+
+        # ConvoRAG.search() emits its own st.write() debug lines (searching
+        # for..., similarity scores, etc.) on every retrieval call - same as
+        # the main chat's RAG debug info, tuck those inside a collapsed
+        # expander instead of letting them clutter the chat response.
+        with st.expander("🔍 Debug info: alert ranking RAG retrieval", expanded=False):
+            for i, alert_entry in enumerate(entries, 1):
+                alert_msg = alert_entry.get("alert", {}).get("alert_message", "")
+
+                def _progress(run_idx, run_total, _i=i, _msg=alert_msg):
+                    status_placeholder.markdown(
+                        f"⏳ Ranking alert {_i}/{total} (run {run_idx}/{run_total}): {_msg}"
+                    )
+
+                result = snort_ranking.rank_alert_three_times(
+                    ollama_client, ranking_model, alert_entry, rag_system, rules,
+                    repeats=3, progress_cb=_progress,
+                )
+                processed.append(result)
+
+        status_placeholder.empty()
+
+        report_text = snort_ranking.build_report_markdown(processed, ranking_model)
+        st.markdown(report_text)
+        st.download_button(
+            "⬇️ Download full ranking report (.txt)",
+            data=report_text,
+            file_name="snort_ranking_report.txt",
+            mime="text/plain",
+            key=f"download_report_new_{len(st.session_state.messages)}",
+        )
+
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": report_text,
+        "report_text": report_text,
+    })
+
+
+def render_alert_confirmation_ui(ranking_model: str):
+    """Inline confirmation widget shown when an uploaded alerts file exceeds
+    the auto-process limit (10 alerts): lets the user type how many to
+    process, or process all of them."""
+    entries = st.session_state.pending_alert_entries
+    total = len(entries)
+
+    with st.chat_message("assistant"):
+        count = st.number_input(
+            f"How many of the {total} alerts do you want to process?",
+            min_value=1, max_value=total, value=min(10, total), step=1,
+            key="alert_count_input",
+        )
+        start_n = st.button("▶️ Process this many", key="process_n_button")
+        process_all = st.button(f"⏩ Process all {total}", key="process_all_button")
+
+    if start_n or process_all:
+        n = total if process_all else int(count)
+        st.session_state.awaiting_alert_confirmation = False
+        st.session_state.pending_alert_entries = None
+        process_alerts_and_respond(entries[:n], ranking_model)
+        st.rerun()
 
 
 def handle_document_upload() -> str:
@@ -930,11 +1156,29 @@ def rag(query: str):
 def main():
     """Main function to run the Streamlit app."""
     st.title("🔒 Cybersecurity Standards Assistant")
-    st.caption("Powered by NIST CSF 2.0 and other cybersecurity standards")
+    st.caption("Powered by NIST CSF 2.0, ISO/IEC 27001:2022, and AI-assisted Snort alert severity ranking")
 
     initialize_session_state()
 
     with st.sidebar:
+        if st.button("🆕 New Chat", use_container_width=True):
+            st.session_state.messages = []
+            st.session_state.conversation_history = []
+            # ConvoRAG keeps its OWN conversation_history attribute (used to
+            # inject prior turns into prompts) - clearing only the session
+            # state list above leaves the RAG object's memory intact, so the
+            # next question would still see the "old" conversation.
+            if st.session_state.rag_system is not None:
+                st.session_state.rag_system.conversation_history = []
+            st.session_state.awaiting_alert_confirmation = False
+            st.session_state.pending_alert_entries = None
+            welcome_msg = "👋 Welcome to the **Cybersecurity Standards Assistant**! Ask me about **NIST CSF 2.0** or **ISO/IEC 27001:2022**, or attach a **Snort alerts JSON file** (📎 in the box below) and I'll rank each alert's severity for you. How can I assist you today?"
+            st.session_state.messages.append(
+                {"role": "assistant", "content": welcome_msg}
+            )
+            st.rerun()
+
+        st.markdown("---")
         st.title("⚙️ Configuration")
         model = st.selectbox(
             "Select LLM Model",
@@ -955,7 +1199,7 @@ def main():
                 index=0 if st.session_state.search_mode == "hybrid" else 1,
                 help=(
                     "**Hybrid Search** combines ChromaDB vector (semantic) search with BM25 "
-                    "keyword search using Reciprocal Rank Fusion — best when questions mix "
+                    "keyword search using Reciprocal Rank Fusion: best when questions mix "
                     "natural language with exact identifiers like PR.DS or GV.RM.\n\n"
                     "**Normal Search** uses ChromaDB vector search only (pure semantic/cosine "
                     "similarity), with no keyword/BM25 matching."
@@ -997,16 +1241,18 @@ def main():
             st.markdown("---")
             st.subheader("🔐 About This System")
             st.markdown("""
-            This assistant answers questions about:
-            * **NIST CSF 2.0** — 6 Core Functions
-            * **Govern** — Strategy & Governance
-            * **Identify** — Asset & Risk Management
-            * **Protect** — Safeguards & Controls
-            * **Detect** — Monitoring & Analysis
-            * **Respond** — Incident Response
-            * **Recover** — Recovery Planning
+            This assistant does two things:
 
-            *Ask any question about cybersecurity standards and frameworks.*
+            **💬 Cybersecurity standards Q&A**
+            * **NIST CSF 2.0**: Govern, Identify, Protect, Detect, Respond, Recover
+            * **ISO/IEC 27001:2022**: Information security management controls
+
+            **🚨 Snort alert severity ranking**
+            * Attach a Snort/Suricata alerts JSON file (📎 in the chat box)
+            * Each alert is ranked 1–5 for severity, run 3× to check consistency
+            * Rankings cite the matched rules and NIST/ISO context above
+
+            *Ask a question, or attach an alerts file to get started.*
             """)
             
             st.markdown("---")
@@ -1067,7 +1313,7 @@ def main():
             )
             st.session_state.document_uploaded = True
 
-            welcome_msg = "👋 Welcome to the **Cybersecurity Standards Assistant**! I am here to help you with questions about cybersecurity frameworks and standards such as **NIST CSF 2.0**. You can ask me about the six core functions (Govern, Identify, Protect, Detect, Respond, Recover), risk management, controls, profiles, tiers, and much more. How can I assist you today?"
+            welcome_msg = "👋 Welcome to the **Cybersecurity Standards Assistant**! I can help in two ways: ask me about cybersecurity frameworks like **NIST CSF 2.0** (Govern, Identify, Protect, Detect, Respond, Recover) and **ISO/IEC 27001:2022** (information security management controls), or attach a **Snort alerts JSON file** (📎 in the box below) and I'll rank each alert's severity, citing these same standards as evidence. How can I assist you today?"
             st.session_state.messages.append(
                 {"role": "assistant", "content": welcome_msg}
             )
@@ -1075,23 +1321,20 @@ def main():
             st.success(f"Cybersecurity documents processed successfully! ({elapsed:.1f}s)")
             st.rerun()
     else:
-        if st.sidebar.button("Reset Conversation"):
-            st.session_state.messages = []
-            st.session_state.conversation_history = []
-            welcome_msg = "👋 Welcome to the **Cybersecurity Standards Assistant**! I am here to help you with questions about cybersecurity frameworks and standards such as **NIST CSF 2.0**. How can I assist you today?"
-            st.session_state.messages.append(
-                {"role": "assistant", "content": welcome_msg}
-            )
-            st.rerun()
-
         if st.sidebar.button("Restart & Reload Documents"):
             st.session_state.clear()
             st.rerun()
 
         display_chat_messages()
-        user_input = handle_user_input()
 
-        if user_input:
+        if st.session_state.awaiting_alert_confirmation:
+            render_alert_confirmation_ui(model)
+
+        user_text, user_files = handle_user_input()
+
+        if user_files:
+            handle_alert_file_upload(user_files, model)
+        elif user_text:
             with st.chat_message("assistant"):
                 message_placeholder = st.empty()
                 full_response = ""
@@ -1107,7 +1350,7 @@ def main():
 
                     message_placeholder.markdown("⏳ Analyzing your question...")
 
-                    llm_stream = rag(user_input)
+                    llm_stream = rag(user_text)
 
                     # Add the placeholder for the partial message immediately
                     st.session_state.messages.append(
@@ -1139,7 +1382,7 @@ def main():
                     stop_button_placeholder.empty()
 
                     st.session_state.rag_system.conversation_history.append(
-                        (user_input, collected_response)
+                        (user_text, collected_response)
                     )
 
                 except Exception as e:

@@ -1,0 +1,582 @@
+# Snort Alert Severity Ranking Report
+
+- **Alerts processed:** 20
+- **Ranking model:** `gemma4:e2b` (Ollama, local)
+- **Judge model:** `gemma2:2b` (Ollama, local, independent)
+- **Repeats per alert:** 3
+- **Consistent across all 3 runs:** 20/20
+
+Severity scale: 1 = Critical, 2 = Likely real attack, 3 = Uncertain, 4 = Low severity, 5 = Informational/noise.
+
+---
+
+## Summary statistics
+
+Aggregated across **20 alerts × 3 runs = 60 judgments**.
+
+### Rank distribution
+
+| Rank | Meaning | # judgments |
+|---|---|---|
+| 1 | Critical / clearly dangerous - must be reviewed immediately | 42 |
+| 2 | Likely a real attack or vulnerability - worth review | 3 |
+| 3 | Uncertain / moderate - could go either way | 0 |
+| 4 | Low severity - probably not worth analyst time | 3 |
+| 5 | Clearly informational / noise - not a real threat | 12 |
+
+### Predefined rules usage (per alert)
+
+| Rule ID | # alerts matched |
+|---|---:|
+| R1 | 8 |
+| R4 | 5 |
+| R5 | 5 |
+| R3 | 2 |
+
+### SID mismatch check
+
+Checks whether the model reported the SAME Snort rule sid the alert actually belongs to, rather than one pulled in by mistake from the RAG-retrieved context (`Unknown` = the model's response didn't include a parseable reported_sid for that run).
+
+- Matched: 60/60
+- **Mismatched: 0/60**
+- Unknown: 0/60
+
+### LLM-as-judge (justification quality, 0.0-1.0, judge model: `gemma2:2b`)
+
+- Scored: 60/60
+- **Average score: 0.908** (0.0 = unsupported, 1.0 = fully supported)
+
+### Alerts that disagreed with Snort's own priority (12/20)
+
+| alert_id | msg | snort priority | mismatched in (of 3 runs) |
+|---|---|---|---|
+| 1047 | OS-MOBILE Apple iPhone User-Agent detected | 1 | 3/3 |
+| 1046 | OS-MOBILE Apple iPhone User-Agent detected | 1 | 3/3 |
+| 1045 | OS-MOBILE Android User-Agent detected | 1 | 3/3 |
+| 1043 | SERVER-WEBAPP iChat directory traversal attempt | 2 | 3/3 |
+| 1042 | SERVER-WEBAPP /etc/shadow file access attempt | 2 | 3/3 |
+| 1040 | OS-MOBILE Apple iPhone User-Agent detected | 1 | 3/3 |
+| 1037 | SERVER-WEBAPP iChat directory traversal attempt | 2 | 3/3 |
+| 1035 | SERVER-WEBAPP iChat directory traversal attempt | 2 | 3/3 |
+| 1033 | OS-MOBILE Apple iPhone User-Agent detected | 1 | 3/3 |
+| 1031 | SERVER-WEBAPP iChat directory traversal attempt | 2 | 3/3 |
+| 1029 | SERVER-WEBAPP iChat directory traversal attempt | 2 | 3/3 |
+| 1028 | SERVER-WEBAPP /etc/shadow file access attempt | 2 | 3/3 |
+
+---
+
+## Alert 1047: OS-MOBILE Apple iPhone User-Agent detected
+
+- **Snort priority:** 1 (sid 25520)
+- **AI severity ranks (3 runs):** 4, 4, 4
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R4, R5
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 4 | Low severity - probably not worth analyst time | Yes | Yes | 0.83 |
+| 2 | 4 | Low severity - probably not worth analyst time | Yes | Yes | 0.83 |
+| 3 | 4 | Low severity - probably not worth analyst time | Yes | Yes | 0.83 |
+
+**Run 1 justification:** This alert is ranked 4 because it is a policy violation triggered by detecting an Apple iPhone User-Agent string, which falls under the 'OS-MOBILE' category. The retrieved context indicates this is a policy violation related to traffic targeting mobile operating systems, suggesting a compliance or policy issue rather than an immediate, high-confidence exploit. This aligns with the hint provided by the predefined rule R4, which suggests policy violations are generally non-technical risks.
+**Run 1 mismatch justification:** Although the rule is classified as a policy violation (R4), the detection of a specific mobile OS User-Agent, as defined by the rule text, indicates targeted reconnaissance against the system. This action moves the alert beyond purely informational noise (R5) into a category where policy evasion or vulnerability scanning is suspected, thus warranting a higher severity rank of 4 despite the low-level policy classification.
+**Run 1 judge reasoning:** The justification is partially supported. It correctly identifies the alert as a policy violation and links it to the 'OS-MOBILE' category. It also references the rule R4, which suggests policy violations are generally non-technical risks. However, the justification lacks specific details about the potential impact of the detected traffic. It would be strengthened by mentioning the potential risks associated with this type of traffic, such as unauthorized access or data exfiltration. Additionally, the justification could benefit from a more detailed explanation of why the alert is not a high-confidence exploit. It should clarify the difference between a policy violation and a potential exploit, and provide evidence to support the claim that the alert is not a high-confidence exploit. Finally, the justification could be strengthened by referencing the specific policy or compliance framework that this alert is triggered by. This would provide a more concrete understanding of the potential impact of the detected traffic. 
+
+**Run 2 justification:** This alert is ranked 4 because it is a policy violation triggered by detecting an Apple iPhone User-Agent string, which falls under the 'OS-MOBILE' category. The retrieved context indicates this is a policy violation related to traffic targeting mobile operating systems, suggesting a compliance or policy issue rather than an immediate, high-confidence exploit. This aligns with the hint provided by the predefined rule R4, which suggests policy violations are generally non-technical risks.
+**Run 2 mismatch justification:** Although the rule is classified as a policy violation (R4), the detection of a specific mobile OS User-Agent, as defined by the rule text, indicates targeted reconnaissance against the system. This action moves the alert beyond purely informational noise (R5) into a category where policy evasion or vulnerability scanning is suspected, thus warranting a higher severity rank of 4 despite the low-level policy classification.
+**Run 2 judge reasoning:** The justification is partially supported. It correctly identifies the alert as a policy violation and links it to the 'OS-MOBILE' category. It also references the rule R4, which suggests policy violations are generally non-technical risks. However, the justification lacks specific details about the potential impact of the detected traffic. It would be strengthened by mentioning the potential risks associated with this type of traffic, such as unauthorized access or data exfiltration. Additionally, the justification could benefit from a more detailed explanation of why the alert is not a high-confidence exploit. It should clarify the difference between a policy violation and a potential exploit, and provide evidence to support the claim that the alert is not a high-confidence exploit. Finally, the justification could be strengthened by referencing the specific policy or compliance framework that this alert is triggered by. This would provide a more concrete understanding of the potential impact of the detected traffic. 
+
+**Run 3 justification:** This alert is ranked 4 because it is a policy violation triggered by detecting an Apple iPhone User-Agent string, which falls under the 'OS-MOBILE' category. The retrieved context indicates this is a policy violation related to traffic targeting mobile operating systems, suggesting a compliance or policy issue rather than an immediate, high-confidence exploit. This aligns with the hint provided by the predefined rule R4, which suggests policy violations are generally non-technical risks.
+**Run 3 mismatch justification:** Although the rule is classified as a policy violation (R4), the detection of a specific mobile OS User-Agent, as defined by the rule text, indicates targeted reconnaissance against the system. This action moves the alert beyond purely informational noise (R5) into a category where policy evasion or vulnerability scanning is suspected, thus warranting a higher severity rank of 4 despite the low-level policy classification.
+**Run 3 judge reasoning:** The justification is partially supported. It correctly identifies the alert as a policy violation and links it to the 'OS-MOBILE' category. It also references the rule R4, which suggests policy violations are generally non-technical risks. However, the justification lacks specific details about the potential impact of the detected traffic. It would be strengthened by mentioning the potential risks associated with this type of traffic, such as unauthorized access or data exfiltration. Additionally, the justification could benefit from a more detailed explanation of why the alert is not a high-confidence exploit. It should clarify the difference between a policy violation and a potential exploit, and provide evidence to support the claim that the alert is not a high-confidence exploit. Finally, the justification could be strengthened by referencing the specific policy or compliance framework that this alert is triggered by. This would provide a more concrete understanding of the potential impact of the detected traffic. 
+
+---
+
+## Alert 1046: OS-MOBILE Apple iPhone User-Agent detected
+
+- **Snort priority:** 1 (sid 25520)
+- **AI severity ranks (3 runs):** 5, 5, 5
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R4, R5
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 5 | Clearly informational / noise - not a real threat | Yes | Yes | 0.83 |
+| 2 | 5 | Clearly informational / noise - not a real threat | Yes | Yes | 0.83 |
+| 3 | 5 | Clearly informational / noise - not a real threat | Yes | Yes | 0.83 |
+
+**Run 1 justification:** This alert is ranked 5 (Clearly informational/noise) because the Snort rule 25520 is a policy violation signature based on detecting a User-Agent string ('iPhone'), which the context frames as targeting vulnerabilities in a mobile OS. The predefined rule R5 (Purely informational signature) supports this assessment, indicating that this type of detection is generally observational rather than an immediate, high-risk attack.
+**Run 1 mismatch justification:** Despite the Snort priority of 1, the alert is classified as low technical risk because the rule's context explicitly defines it as a policy violation related to OS-MOBILE detection, not an active exploit. The rule's metadata specifies a policy action (`policy max-detect-ips drop`), indicating the detection is primarily for compliance monitoring rather than immediate critical threat response, thus justifying a lower severity rank.
+**Run 1 judge reasoning:** The justification is partially supported. It correctly identifies the rule's informational nature and its focus on observing potential vulnerabilities. However, it lacks a deeper analysis of the rule's specific context and how it relates to the alert's severity. The justification could be strengthened by explicitly mentioning the rule's connection to the alert's potential impact, such as the likelihood of a successful attack or the potential for data leakage. Additionally, the justification could benefit from a more detailed explanation of why the rule's informational nature is not a reason to dismiss the alert's severity. For example, the rule's detection of a specific User-Agent string could still indicate a potential security risk, even if it's not a direct attack. Finally, the justification could be strengthened by referencing the specific document context and rule text to provide concrete evidence for the claims made. This would help to ensure that the justification is both accurate and comprehensive.
+
+**Run 2 justification:** This alert is ranked 5 (Clearly informational/noise) because the Snort rule 25520 is a policy violation signature based on detecting a User-Agent string ('iPhone'), which the context frames as targeting vulnerabilities in a mobile OS. The predefined rule R5 (Purely informational signature) supports this assessment, indicating that this type of detection is generally observational rather than an immediate, high-risk attack.
+**Run 2 mismatch justification:** Despite the Snort priority of 1, the alert is classified as low technical risk because the rule's context explicitly defines it as a policy violation related to OS-MOBILE detection, not an active exploit. The rule's metadata specifies a policy action (`policy max-detect-ips drop`), indicating the detection is primarily for compliance monitoring rather than immediate critical threat response, thus justifying a lower severity rank.
+**Run 2 judge reasoning:** The justification is partially supported. It correctly identifies the rule's informational nature and its focus on observing potential vulnerabilities. However, it lacks a deeper analysis of the rule's specific context and how it relates to the alert's severity. The justification could be strengthened by explicitly mentioning the rule's connection to the alert's potential impact, such as the likelihood of a successful attack or the potential for data leakage. Additionally, the justification could benefit from a more detailed explanation of why the rule's informational nature is not a reason to dismiss the alert's severity. For example, the rule's detection of a specific User-Agent string could still indicate a potential security risk, even if it's not a direct attack. Finally, the justification could be strengthened by referencing the specific document context and rule text to provide concrete evidence for the claims made. This would help to ensure that the justification is both accurate and comprehensive.
+
+**Run 3 justification:** This alert is ranked 5 (Clearly informational/noise) because the Snort rule 25520 is a policy violation signature based on detecting a User-Agent string ('iPhone'), which the context frames as targeting vulnerabilities in a mobile OS. The predefined rule R5 (Purely informational signature) supports this assessment, indicating that this type of detection is generally observational rather than an immediate, high-risk attack.
+**Run 3 mismatch justification:** Despite the Snort priority of 1, the alert is classified as low technical risk because the rule's context explicitly defines it as a policy violation related to OS-MOBILE detection, not an active exploit. The rule's metadata specifies a policy action (`policy max-detect-ips drop`), indicating the detection is primarily for compliance monitoring rather than immediate critical threat response, thus justifying a lower severity rank.
+**Run 3 judge reasoning:** The justification is partially supported. It correctly identifies the rule's informational nature and its focus on observing potential vulnerabilities. However, it lacks a deeper analysis of the rule's specific context and how it relates to the alert's severity. The justification could be strengthened by explicitly mentioning the rule's connection to the alert's potential impact, such as the likelihood of a successful attack or the potential for data leakage. Additionally, the justification could benefit from a more detailed explanation of why the rule's informational nature is not a reason to dismiss the alert's severity. For example, the rule's detection of a specific User-Agent string could still indicate a potential security risk, even if it's not a direct attack. Finally, the justification could be strengthened by referencing the specific document context and rule text to provide concrete evidence for the claims made. This would help to ensure that the justification is both accurate and comprehensive.
+
+---
+
+## Alert 1045: OS-MOBILE Android User-Agent detected
+
+- **Snort priority:** 1 (sid 25521)
+- **AI severity ranks (3 runs):** 5, 5, 5
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R4, R5
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 5 | Clearly informational / noise - not a real threat | Yes | Yes | 0.90 |
+| 2 | 5 | Clearly informational / noise - not a real threat | Yes | Yes | 0.90 |
+| 3 | 5 | Clearly informational / noise - not a real threat | Yes | Yes | 0.90 |
+
+**Run 1 justification:** This alert is ranked 5 (Clearly informational/noise) because the rule (SID 25521) is designed to detect specific Android User-Agent strings, which is an informational signature rather than an immediate, high-confidence attack indicator. The retrieved context confirms this rule falls under the 'OS-MOBILE' category and is classified as a 'policy-violation', suggesting it is primarily for policy enforcement rather than indicating an active exploit. This aligns with the hint provided by the predefined rule R5 (Purely informational signature).
+**Run 1 mismatch justification:** Despite the Snort priority of 1, the rule's context indicates a policy violation rather than an immediate technical exploit. The rule category, 'OS-MOBILE -- Snort has detected traffic targeting vulnerabilities in a mobile-based operating system,' suggests this is an informational detection related to compliance, not an active attack. Therefore, ranking it as noise (5) is appropriate because the technical risk is low, aligning with the rule's 'policy-violation' classification.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately reflects the rule's purpose (policy enforcement) and aligns with the predefined rule's classification (purely informational). The analyst correctly identifies the rule's focus on Android User-Agent strings and its potential for policy enforcement rather than immediate attack indication. The justification is specific, well-reasoned, and directly addresses the provided evidence.  
+
+**Run 2 justification:** This alert is ranked 5 (Clearly informational/noise) because the rule (SID 25521) is designed to detect specific Android User-Agent strings, which is an informational signature rather than an immediate, high-confidence attack indicator. The retrieved context confirms this rule falls under the 'OS-MOBILE' category and is classified as a 'policy-violation', suggesting it is primarily for policy enforcement rather than indicating an active exploit. This aligns with the hint provided by the predefined rule R5 (Purely informational signature).
+**Run 2 mismatch justification:** Despite the Snort priority of 1, the rule's context indicates a policy violation rather than an immediate technical exploit. The rule category, 'OS-MOBILE -- Snort has detected traffic targeting vulnerabilities in a mobile-based operating system,' suggests this is an informational detection related to compliance, not an active attack. Therefore, ranking it as noise (5) is appropriate because the technical risk is low, aligning with the rule's 'policy-violation' classification.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately reflects the rule's purpose (policy enforcement) and aligns with the predefined rule's classification (purely informational). The analyst correctly identifies the rule's focus on Android User-Agent strings and its potential for policy enforcement rather than immediate attack indication. The justification is specific, well-reasoned, and directly addresses the provided evidence.  
+
+**Run 3 justification:** This alert is ranked 5 (Clearly informational/noise) because the rule (SID 25521) is designed to detect specific Android User-Agent strings, which is an informational signature rather than an immediate, high-confidence attack indicator. The retrieved context confirms this rule falls under the 'OS-MOBILE' category and is classified as a 'policy-violation', suggesting it is primarily for policy enforcement rather than indicating an active exploit. This aligns with the hint provided by the predefined rule R5 (Purely informational signature).
+**Run 3 mismatch justification:** Despite the Snort priority of 1, the rule's context indicates a policy violation rather than an immediate technical exploit. The rule category, 'OS-MOBILE -- Snort has detected traffic targeting vulnerabilities in a mobile-based operating system,' suggests this is an informational detection related to compliance, not an active attack. Therefore, ranking it as noise (5) is appropriate because the technical risk is low, aligning with the rule's 'policy-violation' classification.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately reflects the rule's purpose (policy enforcement) and aligns with the predefined rule's classification (purely informational). The analyst correctly identifies the rule's focus on Android User-Agent strings and its potential for policy enforcement rather than immediate attack indication. The justification is specific, well-reasoned, and directly addresses the provided evidence.  
+
+---
+
+## Alert 1044: SERVER-WEBAPP Compaq Insight directory traversal
+
+- **Snort priority:** 1 (sid 1199)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R1
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+
+**Run 1 justification:** This alert is ranked as Critical because it directly matches Snort rule 1199, which detects attempts to exploit a Directory Traversal vulnerability (CVE-1999-0771) in a web application. The rule explicitly looks for the content "../", indicating an active attempt to exploit a public-facing vulnerability, which aligns with the MITRE technique T1190 (Exploit Public-Facing Application) detailed in the context.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the rule's content matching, the rule's description, and the MITRE technique associated with the attack. It also correctly identifies the severity level as critical due to the rule's direct match to a known vulnerability. The justification is specific and detailed, providing a clear and concise explanation for the severity rank.  
+
+**Run 2 justification:** This alert is ranked as Critical because it directly matches Snort rule 1199, which detects attempts to exploit a Directory Traversal vulnerability (CVE-1999-0771) in a web application. The rule explicitly looks for the content "../", indicating an active attempt to exploit a public-facing vulnerability, which aligns with the MITRE technique T1190 (Exploit Public-Facing Application) detailed in the context.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the rule's content matching, the rule's description, and the MITRE technique associated with the attack. It also correctly identifies the severity level as critical due to the rule's direct match to a known vulnerability. The justification is specific and detailed, providing a clear and concise explanation for the severity rank.  
+
+**Run 3 justification:** This alert is ranked as Critical because it directly matches Snort rule 1199, which detects attempts to exploit a Directory Traversal vulnerability (CVE-1999-0771) in a web application. The rule explicitly looks for the content "../", indicating an active attempt to exploit a public-facing vulnerability, which aligns with the MITRE technique T1190 (Exploit Public-Facing Application) detailed in the context.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the rule's content matching, the rule's description, and the MITRE technique associated with the attack. It also correctly identifies the severity level as critical due to the rule's direct match to a known vulnerability. The justification is specific and detailed, providing a clear and concise explanation for the severity rank.  
+
+---
+
+## Alert 1043: SERVER-WEBAPP iChat directory traversal attempt
+
+- **Snort priority:** 2 (sid 1604)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** (none)
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.90 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.90 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.90 |
+
+**Run 1 justification:** This alert is ranked as Critical because it directly indicates an active attempt to exploit a known Directory Traversal vulnerability (CVE-1999-0897) on a public-facing web application. The rule documentation explicitly states the impact includes a CVSS base score of 5.0, indicating a high risk to confidentiality. This is a direct exploitation attempt against a known security flaw.
+**Run 1 mismatch justification:** Despite the Snort priority of 2 suggesting a lower severity, the rule explicitly details a Directory Traversal vulnerability that allows attackers to read arbitrary files, leading to potential confidentiality compromise. The rule documentation specifies a CVSS base score of 5.0 and notes that this attack can lead to system integrity compromise, which mandates a critical ranking. Therefore, the actual potential impact of this specific exploit overrides the general priority setting.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the alert's rule documentation, which clearly states the vulnerability, its impact, and the potential for exploitation. The justification also connects the alert to the severity level, citing the CVSS base score and the potential for confidentiality breaches. The justification is specific and avoids generic statements. It also references the rule documentation and the analyst's reasoning for the severity rank. 
+
+**Run 2 justification:** This alert is ranked as Critical because it directly indicates an active attempt to exploit a known Directory Traversal vulnerability (CVE-1999-0897) on a public-facing web application. The rule documentation explicitly states the impact includes a CVSS base score of 5.0, indicating a high risk to confidentiality. This is a direct exploitation attempt against a known security flaw.
+**Run 2 mismatch justification:** Despite the Snort priority of 2 suggesting a lower severity, the rule explicitly details a Directory Traversal vulnerability that allows attackers to read arbitrary files, leading to potential confidentiality compromise. The rule documentation specifies a CVSS base score of 5.0 and notes that this attack can lead to system integrity compromise, which mandates a critical ranking. Therefore, the actual potential impact of this specific exploit overrides the general priority setting.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the alert's rule documentation, which clearly states the vulnerability, its impact, and the potential for exploitation. The justification also connects the alert to the severity level, citing the CVSS base score and the potential for confidentiality breaches. The justification is specific and avoids generic statements. It also references the rule documentation and the analyst's reasoning for the severity rank. 
+
+**Run 3 justification:** This alert is ranked as Critical because it directly indicates an active attempt to exploit a known Directory Traversal vulnerability (CVE-1999-0897) on a public-facing web application. The rule documentation explicitly states the impact includes a CVSS base score of 5.0, indicating a high risk to confidentiality. This is a direct exploitation attempt against a known security flaw.
+**Run 3 mismatch justification:** Despite the Snort priority of 2 suggesting a lower severity, the rule explicitly details a Directory Traversal vulnerability that allows attackers to read arbitrary files, leading to potential confidentiality compromise. The rule documentation specifies a CVSS base score of 5.0 and notes that this attack can lead to system integrity compromise, which mandates a critical ranking. Therefore, the actual potential impact of this specific exploit overrides the general priority setting.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the alert's rule documentation, which clearly states the vulnerability, its impact, and the potential for exploitation. The justification also connects the alert to the severity level, citing the CVSS base score and the potential for confidentiality breaches. The justification is specific and avoids generic statements. It also references the rule documentation and the analyst's reasoning for the severity rank. 
+
+---
+
+## Alert 1042: SERVER-WEBAPP /etc/shadow file access attempt
+
+- **Snort priority:** 2 (sid 43289)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R3
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.95 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.95 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.95 |
+
+**Run 1 justification:** This alert is ranked as Critical because it directly matches Snort rule 43289, which specifically alerts on an attempt to access the highly sensitive /etc/shadow file, classified as an 'Attempted Information Leak' with 'Simple' ease of attack. The context from the rule documentation, referencing MITRE T1087 (Credential Access), supports the high severity of this reconnaissance activity.
+**Run 1 mismatch justification:** Despite the Snort priority of 2 suggesting a lower severity, I assigned a rank of 1 because the rule explicitly flags an attempt to access the highly sensitive /etc/shadow file, which directly corresponds to the MITRE T1087 technique for credential access. The rule explanation details the impact as 'Attempted Information Leak,' indicating a direct compromise of system confidentiality, which warrants critical handling regardless of the initial reconnaissance classification.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, including the rule's classification, MITRE T1087 link, and the specific content of the alert. The justification also clearly explains the severity of the alert based on the rule's classification and the ease of attack. The justification is specific and avoids generic statements. It also references the rule's context and the MITRE T1087 link, which strengthens the justification. 
+
+**Run 2 justification:** This alert is ranked as Critical because it directly matches Snort rule 43289, which specifically alerts on an attempt to access the highly sensitive /etc/shadow file, classified as an 'Attempted Information Leak' with 'Simple' ease of attack. The context from the rule documentation, referencing MITRE T1087 (Credential Access), supports the high severity of this reconnaissance activity.
+**Run 2 mismatch justification:** Despite the Snort priority of 2 suggesting a lower severity, I assigned a rank of 1 because the rule explicitly flags an attempt to access the highly sensitive /etc/shadow file, which directly corresponds to the MITRE T1087 technique for credential access. The rule explanation details the impact as 'Attempted Information Leak,' indicating a direct compromise of system confidentiality, which warrants critical handling regardless of the initial reconnaissance classification.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, including the rule's classification, MITRE T1087 link, and the specific content of the alert. The justification also clearly explains the severity of the alert based on the rule's classification and the ease of attack. The justification is specific and avoids generic statements. It also references the rule's context and the MITRE T1087 link, which strengthens the justification. 
+
+**Run 3 justification:** This alert is ranked as Critical because it directly matches Snort rule 43289, which specifically alerts on an attempt to access the highly sensitive /etc/shadow file, classified as an 'Attempted Information Leak' with 'Simple' ease of attack. The context from the rule documentation, referencing MITRE T1087 (Credential Access), supports the high severity of this reconnaissance activity.
+**Run 3 mismatch justification:** Despite the Snort priority of 2 suggesting a lower severity, I assigned a rank of 1 because the rule explicitly flags an attempt to access the highly sensitive /etc/shadow file, which directly corresponds to the MITRE T1087 technique for credential access. The rule explanation details the impact as 'Attempted Information Leak,' indicating a direct compromise of system confidentiality, which warrants critical handling regardless of the initial reconnaissance classification.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, including the rule's classification, MITRE T1087 link, and the specific content of the alert. The justification also clearly explains the severity of the alert based on the rule's classification and the ease of attack. The justification is specific and avoids generic statements. It also references the rule's context and the MITRE T1087 link, which strengthens the justification. 
+
+---
+
+## Alert 1041: SERVER-WEBAPP Compaq Insight directory traversal
+
+- **Snort priority:** 1 (sid 1199)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R1
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+
+**Run 1 justification:** This alert is ranked as critical because it directly indicates an active attempt to exploit a known vulnerability (CVE-1999-0771) in a web application via a directory traversal attack, as specified by rule 1199. The retrieved context from the Snort rule documentation confirms this is an attempt to exploit a public-facing application, aligning with the MITRE ATT&CK technique T1190 (Exploit Public-Facing Application).
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, specifically mentioning the vulnerability (CVE-1999-0771) and the attack type (directory traversal). It also correctly identifies the context as an active exploitation attempt and aligns with the MITRE ATT&CK technique. The justification is specific and avoids generic statements. The analyst's reasoning is clear and concise, making it a strong justification for the severity rank.
+
+**Run 2 justification:** This alert is ranked as critical because it directly indicates an active attempt to exploit a known vulnerability (CVE-1999-0771) in a web application via a directory traversal attack, as specified by rule 1199. The retrieved context from the Snort rule documentation confirms this is an attempt to exploit a public-facing application, aligning with the MITRE ATT&CK technique T1190 (Exploit Public-Facing Application).
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, specifically mentioning the vulnerability (CVE-1999-0771) and the attack type (directory traversal). It also correctly identifies the context as an active exploitation attempt and aligns with the MITRE ATT&CK technique. The justification is specific and avoids generic statements. The analyst's reasoning is clear and concise, making it a strong justification for the severity rank.
+
+**Run 3 justification:** This alert is ranked as critical because it directly indicates an active attempt to exploit a known vulnerability (CVE-1999-0771) in a web application via a directory traversal attack, as specified by rule 1199. The retrieved context from the Snort rule documentation confirms this is an attempt to exploit a public-facing application, aligning with the MITRE ATT&CK technique T1190 (Exploit Public-Facing Application).
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, specifically mentioning the vulnerability (CVE-1999-0771) and the attack type (directory traversal). It also correctly identifies the context as an active exploitation attempt and aligns with the MITRE ATT&CK technique. The justification is specific and avoids generic statements. The analyst's reasoning is clear and concise, making it a strong justification for the severity rank.
+
+---
+
+## Alert 1040: OS-MOBILE Apple iPhone User-Agent detected
+
+- **Snort priority:** 1 (sid 25520)
+- **AI severity ranks (3 runs):** 5, 5, 5
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R4, R5
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 5 | Clearly informational / noise - not a real threat | Yes | Yes | 0.83 |
+| 2 | 5 | Clearly informational / noise - not a real threat | Yes | Yes | 0.83 |
+| 3 | 5 | Clearly informational / noise - not a real threat | Yes | Yes | 0.83 |
+
+**Run 1 justification:** This alert is ranked 5 (Clearly informational/noise) because the rule is designed to detect the presence of an Apple iPhone User-Agent string, which falls under the 'OS-MOBILE' category and is classified as a 'policy-violation'. The retrieved document context confirms this is a signature-based detection of device information rather than an active exploit, aligning with the hint provided by Rule R5 (Purely informational signature).
+**Run 1 mismatch justification:** Despite the Snort priority of 1 suggesting high severity, the alert is based on a policy violation signature (R4) designed for informational detection rather than immediate technical exploitation. The rule's purpose is to flag device identification for policy enforcement, which inherently reduces the immediate technical risk compared to active attack indicators. Therefore, classifying this as noise (rank 5) reflects that the event is descriptive rather than an active threat.
+**Run 1 judge reasoning:** The justification accurately reflects the rule's purpose and the document context. It correctly identifies the alert as informational/noise and aligns with the provided rule documentation and the rule's classification. The justification also references the rule's category and the document context, providing a clear and concise explanation for the severity rank.  
+
+**Run 2 justification:** This alert is ranked 5 (Clearly informational/noise) because the rule is designed to detect the presence of an Apple iPhone User-Agent string, which falls under the 'OS-MOBILE' category and is classified as a 'policy-violation'. The retrieved document context confirms this is a signature-based detection of device information rather than an active exploit, aligning with the hint provided by Rule R5 (Purely informational signature).
+**Run 2 mismatch justification:** Despite the Snort priority of 1 suggesting high severity, the alert is based on a policy violation signature (R4) designed for informational detection rather than immediate technical exploitation. The rule's purpose is to flag device identification for policy enforcement, which inherently reduces the immediate technical risk compared to active attack indicators. Therefore, classifying this as noise (rank 5) reflects that the event is descriptive rather than an active threat.
+**Run 2 judge reasoning:** The justification accurately reflects the rule's purpose and the document context. It correctly identifies the alert as informational/noise and aligns with the provided rule documentation and the rule's classification. The justification also references the rule's category and the document context, providing a clear and concise explanation for the severity rank.  
+
+**Run 3 justification:** This alert is ranked 5 (Clearly informational/noise) because the rule is designed to detect the presence of an Apple iPhone User-Agent string, which falls under the 'OS-MOBILE' category and is classified as a 'policy-violation'. The retrieved document context confirms this is a signature-based detection of device information rather than an active exploit, aligning with the hint provided by Rule R5 (Purely informational signature).
+**Run 3 mismatch justification:** Despite the Snort priority of 1 suggesting high severity, the alert is based on a policy violation signature (R4) designed for informational detection rather than immediate technical exploitation. The rule's purpose is to flag device identification for policy enforcement, which inherently reduces the immediate technical risk compared to active attack indicators. Therefore, classifying this as noise (rank 5) reflects that the event is descriptive rather than an active threat.
+**Run 3 judge reasoning:** The justification accurately reflects the rule's purpose and the document context. It correctly identifies the alert as informational/noise and aligns with the provided rule documentation and the rule's classification. The justification also references the rule's category and the document context, providing a clear and concise explanation for the severity rank.  
+
+---
+
+## Alert 1039: SERVER-WEBAPP Compaq Insight directory traversal
+
+- **Snort priority:** 1 (sid 1199)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R1
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+
+**Run 1 justification:** This alert is ranked as Critical because it is a direct detection of an attempted exploit targeting a known vulnerability (Directory Traversal) in a web application, as specified by rule 1199. The context from the rule documentation explicitly links this activity to the MITRE technique 'Exploit Public-Facing Application' (T1190) and the vulnerability CVE-1999-0771, indicating an active attack.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, specifically mentioning the rule's connection to the MITRE technique 'Exploit Public-Facing Application' and the vulnerability CVE-1999-0771. The justification also correctly links the alert to the rule's description of a directory traversal attack and its potential impact on the system. The justification is specific and avoids generic statements. It also references the rule's documentation and the analyst's reasoning for the severity rank. Overall, the justification is strong and well-supported by the provided evidence.
+
+**Run 2 justification:** This alert is ranked as Critical because it is a direct detection of an attempted exploit targeting a known vulnerability (Directory Traversal) in a web application, as specified by rule 1199. The context from the rule documentation explicitly links this activity to the MITRE technique 'Exploit Public-Facing Application' (T1190) and the vulnerability CVE-1999-0771, indicating an active attack.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, specifically mentioning the rule's connection to the MITRE technique 'Exploit Public-Facing Application' and the vulnerability CVE-1999-0771. The justification also correctly links the alert to the rule's description of a directory traversal attack and its potential impact on the system. The justification is specific and avoids generic statements. It also references the rule's documentation and the analyst's reasoning for the severity rank. Overall, the justification is strong and well-supported by the provided evidence.
+
+**Run 3 justification:** This alert is ranked as Critical because it is a direct detection of an attempted exploit targeting a known vulnerability (Directory Traversal) in a web application, as specified by rule 1199. The context from the rule documentation explicitly links this activity to the MITRE technique 'Exploit Public-Facing Application' (T1190) and the vulnerability CVE-1999-0771, indicating an active attack.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, specifically mentioning the rule's connection to the MITRE technique 'Exploit Public-Facing Application' and the vulnerability CVE-1999-0771. The justification also correctly links the alert to the rule's description of a directory traversal attack and its potential impact on the system. The justification is specific and avoids generic statements. It also references the rule's documentation and the analyst's reasoning for the severity rank. Overall, the justification is strong and well-supported by the provided evidence.
+
+---
+
+## Alert 1038: SERVER-WEBAPP Compaq Insight directory traversal
+
+- **Snort priority:** 1 (sid 1199)
+- **AI severity ranks (3 runs):** 2, 2, 2
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R1
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 2 | Likely a real attack or vulnerability - worth review | Yes | No | 0.90 |
+| 2 | 2 | Likely a real attack or vulnerability - worth review | Yes | No | 0.90 |
+| 3 | 2 | Likely a real attack or vulnerability - worth review | Yes | No | 0.90 |
+
+**Run 1 justification:** This alert is ranked 2 because it is a direct detection of an attempt to exploit a known vulnerability (Directory Traversal, CVE-1999-0771) against a public-facing web application, which aligns with the MITRE technique T1190 (Exploit Public-Facing Application). This is supported by the rule documentation for SID 1199, which explicitly flags attempts to use '..' sequences in HTTP traffic as an exploit.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately identifies the alert as a potential exploit of a known vulnerability (Directory Traversal) and links it to the MITRE technique T1190. The justification references the rule documentation for SID 1199, which explicitly mentions the use of '..' sequences as a potential exploit. The justification also correctly identifies the alert's severity level (2) based on the context of the alert and the rule documentation.  It is well-reasoned and specific, providing a clear justification for the severity rank.
+
+**Run 2 justification:** This alert is ranked 2 because it is a direct detection of an attempt to exploit a known vulnerability (Directory Traversal, CVE-1999-0771) against a public-facing web application, which aligns with the MITRE technique T1190 (Exploit Public-Facing Application). This is supported by the rule documentation for SID 1199, which explicitly flags attempts to use '..' sequences in HTTP traffic as an exploit.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately identifies the alert as a potential exploit of a known vulnerability (Directory Traversal) and links it to the MITRE technique T1190. The justification references the rule documentation for SID 1199, which explicitly mentions the use of '..' sequences as a potential exploit. The justification also correctly identifies the alert's severity level (2) based on the context of the alert and the rule documentation.  It is well-reasoned and specific, providing a clear justification for the severity rank.
+
+**Run 3 justification:** This alert is ranked 2 because it is a direct detection of an attempt to exploit a known vulnerability (Directory Traversal, CVE-1999-0771) against a public-facing web application, which aligns with the MITRE technique T1190 (Exploit Public-Facing Application). This is supported by the rule documentation for SID 1199, which explicitly flags attempts to use '..' sequences in HTTP traffic as an exploit.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately identifies the alert as a potential exploit of a known vulnerability (Directory Traversal) and links it to the MITRE technique T1190. The justification references the rule documentation for SID 1199, which explicitly mentions the use of '..' sequences as a potential exploit. The justification also correctly identifies the alert's severity level (2) based on the context of the alert and the rule documentation.  It is well-reasoned and specific, providing a clear justification for the severity rank.
+
+---
+
+## Alert 1037: SERVER-WEBAPP iChat directory traversal attempt
+
+- **Snort priority:** 2 (sid 1604)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** (none)
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.90 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.90 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.90 |
+
+**Run 1 justification:** This alert is ranked as Critical because it is a direct detection of a Directory Traversal attempt against a known vulnerable web application, as detailed in the rule documentation. The rule explicitly cites a CVSS base score of 5.0 and references CVE-1999-0897, indicating a high potential for confidentiality compromise. This represents an active exploitation attempt against a public-facing vulnerability.
+**Run 1 mismatch justification:** Despite Snort's priority of 2 suggesting a new rank of 3, I assigned a rank of 1 because the rule explicitly details a Directory Traversal vulnerability that allows attackers to access and potentially expose sensitive system files, citing a CVSS base score of 5.0. This high potential for confidentiality compromise, as detailed in the rule's impact section, mandates a critical response regardless of the standard priority mapping.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, including the rule's name, the CVSS score, the CVE ID, and the impact of the vulnerability. It also correctly identifies the alert as a direct detection of a Directory Traversal attempt against a known vulnerable web application. The justification is specific and provides a clear explanation of why the alert is considered critical. It also mentions the potential for confidentiality compromise and the vulnerability's impact on the system's integrity.  The justification is well-written and provides a strong rationale for the severity rank.
+
+**Run 2 justification:** This alert is ranked as Critical because it is a direct detection of a Directory Traversal attempt against a known vulnerable web application, as detailed in the rule documentation. The rule explicitly cites a CVSS base score of 5.0 and references CVE-1999-0897, indicating a high potential for confidentiality compromise. This represents an active exploitation attempt against a public-facing vulnerability.
+**Run 2 mismatch justification:** Despite Snort's priority of 2 suggesting a new rank of 3, I assigned a rank of 1 because the rule explicitly details a Directory Traversal vulnerability that allows attackers to access and potentially expose sensitive system files, citing a CVSS base score of 5.0. This high potential for confidentiality compromise, as detailed in the rule's impact section, mandates a critical response regardless of the standard priority mapping.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, including the rule's name, the CVSS score, the CVE ID, and the impact of the vulnerability. It also correctly identifies the alert as a direct detection of a Directory Traversal attempt against a known vulnerable web application. The justification is specific and provides a clear explanation of why the alert is considered critical. It also mentions the potential for confidentiality compromise and the vulnerability's impact on the system's integrity.  The justification is well-written and provides a strong rationale for the severity rank.
+
+**Run 3 justification:** This alert is ranked as Critical because it is a direct detection of a Directory Traversal attempt targeting a known vulnerability (CVE-1999-0897) on a web application. The rule documentation explicitly states the impact includes potential confidentiality compromise and assigns a CVSS base score of 5.0, indicating a high risk of data exposure. This aligns with the principle of immediate review for active exploitation attempts.
+**Run 3 mismatch justification:** Despite Snort's priority of 2, I assigned a rank of 1 because the rule explicitly details a Directory Traversal vulnerability (CVE-1999-0897) on a public-facing web application. This vulnerability allows attackers to read arbitrary files, directly impacting confidentiality, which aligns with the rule's stated impact of 'confidentialityImpact PARTIAL'. Therefore, the potential for sensitive data exposure elevates this event to a critical severity regardless of the general Snort priority mapping.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the alert's rule documentation, which explicitly states the vulnerability, its potential impact, and the CVSS score. The justification also aligns with the analyst's reasoning, highlighting the severity of the alert due to the potential for data exposure and the presence of a known vulnerability. The justification is specific and avoids generic statements. 
+
+---
+
+## Alert 1036: SERVER-WEBAPP Compaq Insight directory traversal
+
+- **Snort priority:** 1 (sid 1199)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R1
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+
+**Run 1 justification:** This alert is ranked as critical because it is a direct detection of an attempted exploit targeting a known vulnerability (Directory Traversal, CVE-1999-0771) in a public-facing web application, aligning with the MITRE technique 'Exploit Public-Facing Application' (T1190). The rule explicitly looks for the use of '../' content in HTTP traffic, indicating an active attempt to breach system boundaries.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the rule's description, the specific vulnerability (Directory Traversal), and the associated MITRE technique. It also correctly links the alert to the analyst's severity ranking, demonstrating a clear understanding of the alert's significance. The justification is specific and avoids generic statements.  
+
+**Run 2 justification:** This alert is ranked as Critical because it directly matches Snort rule 1199, which specifically detects attempts to exploit a Directory Traversal vulnerability (CVE-1999-0771) in a web application. The retrieved context confirms that this activity falls under the MITRE technique T1190 (Exploit Public-Facing Application), indicating an active attempt to exploit a known security weakness. This represents a direct attack against the integrity and confidentiality of the web server.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately identifies the alert as a critical event due to its direct match with rule 1199, which specifically targets directory traversal vulnerabilities. The justification also provides relevant context from the rule documentation, including the CVE ID, MITRE technique, and the potential impact of the attack. The analyst's reasoning is clear, concise, and directly links the alert to the rule and its associated context.  The justification is not generic or vague, and it provides a strong rationale for the severity rank.
+
+**Run 3 justification:** This alert is ranked as Critical because it directly matches Snort rule 1199, which specifically detects attempts to exploit a Directory Traversal vulnerability (CVE-1999-0771) in a web application. The retrieved context confirms that this activity falls under the MITRE technique T1190 (Exploit Public-Facing Application), indicating an active attempt to exploit a known security weakness. This represents a direct attack against the integrity and confidentiality of the web server.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately identifies the alert as a critical incident due to its direct match with rule 1199, which specifically targets directory traversal vulnerabilities. The justification also provides relevant context from the rule documentation, including the CVE ID, MITRE technique, and the potential impact of the attack. The analyst's reasoning is clear, concise, and directly links the alert to the rule and its associated context.  The justification is not generic or vague, and it provides a strong rationale for the severity rank.
+
+---
+
+## Alert 1035: SERVER-WEBAPP iChat directory traversal attempt
+
+- **Snort priority:** 2 (sid 1604)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** (none)
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.90 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.95 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.95 |
+
+**Run 1 justification:** This alert is ranked as Critical because it is a direct detection of a Directory Traversal attempt targeting a known vulnerability (CVE-1999-0897) on a web application. The rule documentation explicitly states the impact includes a CVSS base score of 5.0, indicating a high risk of information leakage or system compromise. This aligns with the principle of immediate review for active exploitation attempts.
+**Run 1 mismatch justification:** Despite Snort's priority of 2 suggesting a new rank of 3, I assigned a rank of 1 because the rule explicitly details a Directory Traversal vulnerability (CVE-1999-0897) that allows attackers to access arbitrary files, resulting in a CVSS base score of 5.0. This potential for sensitive data leakage and system file compromise elevates the risk beyond the standard mapping, demanding immediate critical response regardless of the Snort priority level.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the alert's rule documentation, which explicitly states the vulnerability (CVE-1999-0897) and its potential impact (CVSS base score of 5.0). The justification also aligns with the analyst's reasoning, highlighting the severity of the alert due to the potential for information leakage or system compromise. The justification is specific and avoids generic statements. It also references the rule documentation and the analyst's reasoning, providing a clear and concise explanation for the severity rank. 
+
+**Run 2 justification:** This alert is ranked as Critical because it directly indicates an active attempt to exploit a known Directory Traversal vulnerability (CVE-1999-0897) on a web application. The rule documentation explicitly states the potential impact includes a CVSS base score of 5.0, making this an immediate threat to confidentiality. This decision is supported by the rule documentation for SID 1604, which details the nature and potential consequences of the attack.
+**Run 2 mismatch justification:** Despite the Snort priority of 2 suggesting a new rank of 3, I assigned a rank of 1 because the rule explicitly details a Directory Traversal vulnerability (CVE-1999-0897) that allows attackers to access arbitrary files, directly impacting confidentiality. The rule explanation notes that this attack can lead to information leakage, which elevates the risk beyond a standard priority mapping.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, specifically the rule's description of the vulnerability, its potential impact (CVSS score), and the rule's SID for further context. The justification also clearly links the alert to the severity rank, demonstrating a strong understanding of the alert's significance. The justification is specific and avoids generic statements.  
+
+**Run 3 justification:** This alert is ranked as Critical because it directly indicates an active attempt to exploit a known Directory Traversal vulnerability (CVE-1999-0897) on a web application. The rule documentation explicitly states the potential impact includes a CVSS base score of 5.0, making this an immediate threat to confidentiality. This decision is supported by the rule documentation for SID 1604, which details the nature and potential consequences of the attack.
+**Run 3 mismatch justification:** Despite the Snort priority of 2 suggesting a new rank of 3, I assigned a rank of 1 because the rule explicitly details a Directory Traversal vulnerability (CVE-1999-0897) that allows attackers to access arbitrary files, directly impacting confidentiality. The rule explanation notes that this attack can lead to information leakage, which elevates the risk beyond a standard priority mapping.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, specifically the rule's description of the vulnerability, its potential impact (CVSS score), and the rule's SID for further context. The justification also clearly links the alert to the severity rank, demonstrating a strong understanding of the alert's significance.  The justification is specific and avoids generic statements.  
+
+---
+
+## Alert 1034: SERVER-WEBAPP Compaq Insight directory traversal
+
+- **Snort priority:** 1 (sid 1199)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R1
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+
+**Run 1 justification:** This alert is ranked as Critical because it is a direct detection of an active attempt to exploit a known vulnerability (Directory Traversal, CVE-1999-0771) in a web application. The rule explicitly targets exploitation of public-facing applications, which aligns with the MITRE technique 'Exploit Public-Facing Application' and the 'Initial Access' tactic. This constitutes an active attack attempt against a known weakness.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately reflects the severity of the alert by referencing the known vulnerability (Directory Traversal) and its potential impact (denial of service). The justification also aligns with the rule's context, specifically mentioning the rule's focus on web applications and the MITRE techniques associated with this type of attack. The justification is specific and avoids vague generalizations. It also correctly identifies the rule's focus on active exploitation and the potential for a denial-of-service attack.  
+
+**Run 2 justification:** This alert is ranked as Critical because it explicitly matches Snort rule 1199, which detects attempts to exploit a directory traversal vulnerability (CVE-1999-0771) in a web application. The rule documentation indicates this is an attempt to exploit a public-facing application, aligning with the MITRE technique T1190 (Exploit Public-Facing Application). This constitutes an active exploitation attempt, making it the highest priority.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, including the rule's name, the vulnerability it detects (directory traversal), the associated CVE (CVE-1999-0771), and the MITRE technique (T1190). The justification also correctly identifies the alert's severity as critical due to the rule's classification as an active exploitation attempt. The justification is specific and provides a clear rationale for the severity rank. 
+
+**Run 3 justification:** This alert is ranked as Critical because it explicitly matches Snort rule 1199, which detects attempts to exploit a directory traversal vulnerability (CVE-1999-0771) in a web application. The rule documentation indicates this is an attempt to exploit a public-facing application, aligning with the MITRE technique T1190 (Exploit Public-Facing Application). This constitutes an active exploitation attempt, making it the highest priority.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, including the rule's name, the vulnerability it detects (directory traversal), the associated CVE (CVE-1999-0771), and the MITRE technique (Exploit Public-Facing Application). The justification also correctly links the rule to the severity rank, stating that it is a critical alert due to the active exploitation nature of the traffic. The justification is specific and avoids generic statements. It also provides context by mentioning the rule's classification as 'web-application-attack' and the potential impact of the vulnerability.  The justification is well-written and provides a clear and concise explanation for the severity rank.  
+
+---
+
+## Alert 1033: OS-MOBILE Apple iPhone User-Agent detected
+
+- **Snort priority:** 1 (sid 25520)
+- **AI severity ranks (3 runs):** 5, 5, 5
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R4, R5
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 5 | Clearly informational / noise - not a real threat | Yes | Yes | 0.83 |
+| 2 | 5 | Clearly informational / noise - not a real threat | Yes | Yes | 0.83 |
+| 3 | 5 | Clearly informational / noise - not a real threat | Yes | Yes | 0.83 |
+
+**Run 1 justification:** This alert is ranked 5 (Clearly informational/noise) because the rule (SID 25520) is designed to detect the presence of an Apple iPhone User-Agent string, which is a policy violation rather than an active exploit. The retrieved context confirms the rule category is 'OS-MOBILE -- Snort has detected traffic targeting vulnerabilities in a mobile-based operating system,' suggesting this is a detection mechanism rather than an immediate, critical attack. This aligns with the hint provided by the predefined rule R5 (Purely informational signature).
+**Run 1 mismatch justification:** Despite the Snort priority of 1 suggesting a high-severity alert, the actual risk is low because this signature is purely informational, detecting a User-Agent string rather than an active exploit. The rule's classification is 'policy-violation' and the metadata action is 'drop', indicating a compliance or observational finding rather than an immediate technical attack, which justifies a lower severity rank of 5 (noise).
+**Run 1 judge reasoning:** The justification is mostly well-supported. It correctly identifies the alert as informational/noise based on the rule's purpose and the document context. The analyst accurately points out the rule's focus on detecting the presence of an iPhone User-Agent string and its classification as a policy violation rather than an active exploit.  The justification also references the rule's category and the hint provided by the predefined rule R5, which strengthens the connection between the alert and its classification. However, the justification could be strengthened by explicitly mentioning the lack of evidence of an active attack or exploit, which would further solidify the 'noise' classification.  
+
+**Run 2 justification:** This alert is ranked 5 (Clearly informational/noise) because the Snort rule (25520) is designed to detect the presence of an Apple iPhone User-Agent, which is a policy violation related to mobile OS detection rather than an active exploit. The retrieved document context confirms the rule targets OS-MOBILE traffic, suggesting it is a detection mechanism rather than an immediate, high-risk attack. This aligns with the hint provided by the predefined rule R5 (Purely informational signature).
+**Run 2 mismatch justification:** Although the Snort priority is low (1), the alert is classified as a policy violation related to OS-MOBILE detection, which suggests potential reconnaissance activity. Since this signature is purely observational and does not indicate an active exploit, the risk is informational rather than immediate, justifying a higher noise rank of 5. This rank reflects the volume of non-malicious, policy-related detections that require review but do not pose an immediate threat.
+**Run 2 judge reasoning:** The justification accurately reflects the rule's purpose and the document context. It correctly identifies the alert as informational/noise and aligns with the predefined rule's classification (R5). The justification also provides a clear explanation of why the alert is not a high-risk attack, which is supported by the rule's description and the document context.  The justification is well-written and specific, making it a strong justification for the severity rank.
+
+**Run 3 justification:** This alert is ranked 5 (Clearly informational/noise) because the Snort rule (25520) is designed to detect the presence of an Apple iPhone User-Agent, which is a policy violation related to mobile OS detection rather than an active exploit. The retrieved document context confirms the rule targets OS-MOBILE traffic, suggesting it is a detection mechanism rather than an immediate, high-risk attack. This aligns with the hint provided by the predefined rule R5 (Purely informational signature).
+**Run 3 mismatch justification:** Although the Snort priority is low (1), the alert is classified as a policy violation related to OS-MOBILE detection, which suggests potential reconnaissance activity. Since this signature is purely observational and does not indicate an active exploit, the risk is informational rather than immediate, justifying a higher noise rank of 5. This rank reflects the volume of non-malicious, policy-related detections that require review but do not pose an immediate threat.
+**Run 3 judge reasoning:** The justification is partially supported. It correctly identifies the alert as informational/noise based on the rule's purpose and the document context. However, it could be strengthened by explicitly mentioning the rule's focus on OS-MOBILE traffic and its potential for policy violations, rather than just stating it's a detection mechanism.  The justification also lacks a clear connection to the severity_rank (5) assigned by the analyst.  It would be helpful to explicitly link the justification to the severity_rank's reasoning, such as 'The severity_rank of 5 aligns with the rule's informational nature and the lack of immediate attack indicators.'
+
+---
+
+## Alert 1032: SERVER-WEBAPP Compaq Insight directory traversal
+
+- **Snort priority:** 1 (sid 1199)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R1
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+
+**Run 1 justification:** This alert is ranked as critical because it explicitly detects an attempt to exploit a known directory traversal vulnerability (CVE-1999-0771) in a web application, which aligns with the MITRE technique for Initial Access (T1190). The rule documentation confirms that the traffic contained the sequence "../", indicating an active exploit attempt against a public-facing vulnerability.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the rule documentation and provides a clear explanation for the severity rank. The justification specifically mentions the CVE-1999-0771 vulnerability and its connection to the MITRE technique for Initial Access. It also highlights the presence of the sequence 
+
+**Run 2 justification:** This alert is ranked as Critical because it directly matches Snort rule 1199, which is specifically designed to detect attempts to exploit a Directory Traversal vulnerability in a web application. The rule documentation explicitly links this activity to the MITRE technique T1190 (Exploit Public-Facing Application), indicating an active exploitation attempt against a known vulnerability (CVE-1999-0771).
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, specifically mentioning the rule's purpose, the MITRE technique associated with the attack, and the CVE-1999-0771 vulnerability. The justification also connects the alert to the rule's documentation, highlighting the rule's specific focus on directory traversal vulnerabilities. The justification is specific and detailed, providing a clear and concise explanation for the severity rank assigned by the analyst. 
+
+**Run 3 justification:** This alert is ranked as Critical because it directly matches Snort rule 1199, which is specifically designed to detect attempts to exploit a Directory Traversal vulnerability in a web application. The rule documentation explicitly links this activity to the MITRE technique T1190 (Exploit Public-Facing Application), indicating an active exploitation attempt against a known vulnerability (CVE-1999-0771).
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, specifically mentioning the rule's purpose, the MITRE technique associated with the attack, and the CVE-1999-0771 vulnerability. The justification also connects the alert to the rule's documentation, highlighting the rule's specific focus on directory traversal attacks. The analyst's reasoning is clear, concise, and directly links the alert to the rule's context.  
+
+---
+
+## Alert 1031: SERVER-WEBAPP iChat directory traversal attempt
+
+- **Snort priority:** 2 (sid 1604)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** (none)
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.90 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.95 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.90 |
+
+**Run 1 justification:** This alert is ranked as Critical because it directly matches Snort rule 1604, which alerts on a Directory Traversal attempt on a web application, a vulnerability with a high CVSS base score of 5.0. The retrieved document context explicitly details that this attack allows attackers to read arbitrary files, indicating a high risk to confidentiality. This is an active exploitation attempt against a known vulnerability.
+**Run 1 mismatch justification:** Despite Snort's priority of 2 suggesting a new rank of 3, I assigned a rank of 1 because the rule explicitly details a Directory Traversal vulnerability that allows attackers to read arbitrary files, directly correlating to a high CVSS base score of 5.0. This vulnerability, which targets public-facing web application input validation, represents a critical risk of data exposure and potential system compromise, which mandates a higher severity than the default mapping suggests.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the rule 1604, which specifically targets directory traversal attempts on web applications. The justification also correctly identifies the high CVSS base score (5.0) and the potential for confidentiality breaches. The mention of the attack's impact on the system's integrity and the potential for unauthorized access further strengthens the justification. The justification is specific and directly addresses the alert's content and the rule's context. 
+
+**Run 2 justification:** This alert is ranked as Critical because it represents an active attempt to exploit a known Directory Traversal vulnerability (CVE-1999-0897) on a web application, which the rule documentation explicitly states has a high impact (CVSS base score 5.0). The alert directly matches Snort rule 1604, indicating an immediate security risk.
+**Run 2 mismatch justification:** Despite Snort's priority of 2 suggesting a new rank of 3, I assigned a rank of 1 because the alert describes an active directory traversal attempt against a public-facing web application, which is explicitly documented as exploiting a vulnerability (CVE-1999-0897) with a CVSS base score of 5.0. This indicates a high potential for immediate information leakage or system compromise, overriding the moderate priority assigned by the rule itself.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, specifically the rule's description of the vulnerability, its impact, and the rule's connection to the alert. The justification also highlights the severity of the alert due to the vulnerability's CVSS score and the direct match with the rule. The justification is specific and avoids generic statements. It also provides a clear rationale for the severity rank.
+
+**Run 3 justification:** This alert is ranked as Critical because it represents an active attempt to exploit a known Directory Traversal vulnerability (CVE-1999-0897) on a web application, which the rule documentation explicitly states has a high impact (CVSS base score 5.0). The alert directly matches Snort rule 1604, indicating an immediate security risk.
+**Run 3 mismatch justification:** Despite Snort's priority of 2 suggesting a new rank of 3, I assigned a rank of 1 because the alert describes an active directory traversal attempt against a public-facing web application, which is explicitly documented as exploiting a vulnerability (CVE-1999-0897) with a CVSS base score of 5.0. This indicates a high potential for immediate information leakage or system compromise, overriding the moderate priority assigned by the rule itself.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the alert's severity based on the rule documentation and the impact of the vulnerability. The justification clearly links the alert to the rule, the rule's documentation, and the CVE-1999-0897 vulnerability. It also mentions the CVSS score, which is a strong indicator of the severity of the alert. The justification is concise and specific, making it easy to understand and evaluate. 
+
+---
+
+## Alert 1030: SERVER-WEBAPP Compaq Insight directory traversal
+
+- **Snort priority:** 1 (sid 1199)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R1
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+
+**Run 1 justification:** This alert is ranked as Critical because it directly matches Snort rule 1199, which detects attempts to exploit a directory traversal vulnerability in a web-based application (CVE-1999-0771). The context confirms this is an attempt to exploit a public-facing application, mapping to the MITRE ATT&CK technique Initial Access (T1190).
+**Run 1 judge reasoning:** The justification is well-supported. It correctly identifies the alert as a critical alert due to the rule matching a known vulnerability (CVE-1999-0771) and the context confirming the attack is targeting a web application. The justification also accurately links the alert to the MITRE ATT&CK technique for Initial Access (T1190). The justification is specific and avoids vague claims. It also references the rule documentation and the analyst's reasoning for the severity rank.  
+
+**Run 2 justification:** This alert is ranked as Critical because it explicitly matches Snort rule 1:1199, which detects attempts to exploit a Directory Traversal vulnerability in the Compaq Insight web application, referencing CVE-1999-0771. The context confirms this is an attempt to exploit a public-facing application, which aligns with the MITRE technique 'Exploit Public-Facing Application'.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the rule's description, the CVE associated with the vulnerability, and the MITRE technique related to the attack. It also correctly identifies the alert's severity level based on the rule's classification and the context provided. The justification is specific and detailed, providing a clear and concise explanation for the severity rank assigned by the analyst.  
+
+**Run 3 justification:** This alert is ranked as Critical because it explicitly matches Snort rule 1:1199, which detects attempts to exploit a Directory Traversal vulnerability in the Compaq Insight web application, referencing CVE-1999-0771. The context confirms this is an attempt to exploit a public-facing application, which aligns with the MITRE technique 'Exploit Public-Facing Application'.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the rule's name (1:1199) and its description, linking it to the specific vulnerability (Directory Traversal) and its potential impact (denial of service). The justification also correctly identifies the context as a public-facing application and aligns with the MITRE technique 'Exploit Public-Facing Application'. The justification is specific and avoids vague generalizations. It also references the CVE-1999-0771, which is a key piece of evidence for the alert's severity.  
+
+---
+
+## Alert 1029: SERVER-WEBAPP iChat directory traversal attempt
+
+- **Snort priority:** 2 (sid 1604)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** (none)
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.90 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.90 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.90 |
+
+**Run 1 justification:** This alert is ranked as Critical because it directly matches Snort rule 1604, which alerts on a Directory Traversal attempt against an iChat ROOMS Webserver, a vulnerability with a CVSS base score of 5.0. The rule documentation explicitly states that this attack allows attackers to read arbitrary files, indicating a high risk to confidentiality. This aligns with the NIST CSF goal of protecting data from unauthorized access.
+**Run 1 mismatch justification:** Despite the Snort priority of 2 suggesting a new rank of 3, I assigned a rank of 1 because the rule explicitly details a Directory Traversal vulnerability (CVE-1999-0897) which allows attackers to access arbitrary files, indicating a high potential for confidentiality compromise. The rule explanation notes that this attack can lead to system file leakage, justifying a critical severity rating regardless of the standard priority mapping.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, including the rule category, the specific vulnerability (Directory Traversal), the CVSS score, and the impact on confidentiality. The justification also connects the alert to the NIST CSF goal of protecting data from unauthorized access. The justification is specific and provides a clear rationale for the severity rank.  
+
+**Run 2 justification:** This alert is ranked as Critical because it directly matches Snort rule 1604, which alerts on a Directory Traversal attempt on an iChat ROOMS Webserver, exploiting the vulnerability CVE-1999-0897. The rule documentation explicitly states the impact involves confidentiality compromise and assigns a CVSS base score of 5.0, indicating a high risk of unauthorized file access.
+**Run 2 mismatch justification:** Despite the Snort priority of 2 typically mapping to a new rank of 3, I assigned a rank of 1 because the rule explicitly details a Directory Traversal vulnerability with a high CVSS base score of 5.0, indicating a critical risk to confidentiality. This inherent severity of the exploited vulnerability overrides the standard priority mapping, demanding immediate attention regardless of the Snort priority level.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, including the rule category, protocol, service, flow, and specific vulnerability (CVE-1999-0897). The justification also correctly identifies the impact of the vulnerability (confidentiality compromise) and provides a CVSS base score (5.0) to support the severity ranking. The justification is specific and avoids generic statements. It also references the rule documentation for further details.  
+
+**Run 3 justification:** This alert is ranked as Critical because it directly matches Snort rule 1604, which alerts on a Directory Traversal attempt on an iChat ROOMS Webserver, exploiting the vulnerability CVE-1999-0897. The rule documentation explicitly states the impact involves confidentiality compromise and assigns a CVSS base score of 5.0, indicating a high risk of unauthorized file access.
+**Run 3 mismatch justification:** Despite the Snort priority of 2 typically mapping to a new rank of 3, I assigned a rank of 1 because the rule explicitly details a Directory Traversal vulnerability with a high CVSS base score of 5.0, indicating a critical risk to confidentiality. This inherent severity of the exploited vulnerability overrides the standard priority mapping, demanding immediate attention regardless of the Snort priority level.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, including the rule category, protocol, service, flow, and specific vulnerability (CVE-1999-0897). The justification also correctly identifies the potential impact of the vulnerability (confidentiality compromise) and provides a CVSS base score, which supports the severity ranking. The justification is specific and avoids generic statements.  
+
+---
+
+## Alert 1028: SERVER-WEBAPP /etc/shadow file access attempt
+
+- **Snort priority:** 2 (sid 43289)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R3
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.95 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.95 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | Yes | 0.95 |
+
+**Run 1 justification:** This alert is ranked as Critical because it explicitly flags an attempt to access the highly sensitive /etc/shadow file, which constitutes an Attempted Information Leak (MITRE T1087). The rule documentation states the ease of attack is 'Simple,' indicating a direct and serious threat to system integrity and credential security. This activity is a clear indicator of reconnaissance or an active attempt at privilege escalation.
+**Run 1 mismatch justification:** Despite the Snort priority suggesting a lower severity, I assigned a rank of 1 (Critical) because accessing the /etc/shadow file represents a direct and high-impact attempt at information leakage. The rule documentation explicitly states the impact is 'Attempted Information Leak' with an 'Ease of Attack: Simple,' indicating a severe compromise attempt rather than mere reconnaissance. Therefore, the actual potential for system compromise warrants a critical rating regardless of the Snort priority mapping.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, highlighting the rule's focus on accessing the /etc/shadow file, its impact as an Information Leak, and the ease of attack. The justification also connects the severity to the rule's documentation, which explicitly states the ease of attack is 'Simple,' indicating a direct and serious threat to system integrity and credential security. This activity is a clear indicator of reconnaissance or an active attempt at privilege escalation. 
+
+**Run 2 justification:** This alert is ranked as critical because it explicitly flags an attempt to access the highly sensitive /etc/shadow file, which is classified as an 'Attempted Information Leak' and maps to MITRE T1087 (Credential Access). The rule documentation states the ease of attack is 'Simple,' indicating a direct and serious threat of reconnaissance or compromise.
+**Run 2 mismatch justification:** Despite the Snort priority suggesting a lower severity, I assigned a rank of 1 because accessing the /etc/shadow file represents a direct attempt to gather highly sensitive system credentials, which is a critical indicator of compromise (MITRE T1087). The rule explicitly states the impact is 'Attempted Information Leak,' and this action directly targets the most sensitive file on a Linux system, warranting immediate critical attention regardless of the initial reconnaissance classification.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, highlighting the 'Attempted Information Leak' classification and the MITRE T1087 (Credential Access) connection. It also correctly identifies the ease of attack as 'Simple,' which aligns with the rule's description. The justification is specific and directly addresses the alert's severity, making it a strong justification for a severity rank of 1.
+
+**Run 3 justification:** This alert is ranked as critical because it explicitly flags an attempt to access the highly sensitive /etc/shadow file, which is classified as an 'Attempted Information Leak' and maps to MITRE T1087 (Credential Access). The rule documentation states the ease of attack is 'Simple,' indicating a direct and serious threat of reconnaissance or compromise.
+**Run 3 mismatch justification:** Despite the Snort priority suggesting a lower severity, I assigned a rank of 1 because accessing the /etc/shadow file represents a direct attempt to gather highly sensitive system credentials, which is a critical indicator of compromise (MITRE T1087). The rule explicitly states the impact is 'Attempted Information Leak,' and this action directly targets the most sensitive file on a Linux system, warranting immediate critical attention regardless of the initial reconnaissance classification.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, highlighting the 'Attempted Information Leak' classification and the MITRE T1087 vulnerability. The justification also correctly identifies the ease of attack as 'Simple,' which aligns with the rule's description. The justification provides a clear and concise explanation for the severity rank, demonstrating a thorough understanding of the alert's significance.
+
+---

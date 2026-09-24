@@ -1,0 +1,582 @@
+# Snort Alert Severity Ranking Report
+
+- **Alerts processed:** 20
+- **Ranking model:** `phi4-mini` (Ollama, local)
+- **Judge model:** `gemma2:2b` (Ollama, local, independent)
+- **Repeats per alert:** 3
+- **Consistent across all 3 runs:** 20/20
+
+Severity scale: 1 = Critical, 2 = Likely real attack, 3 = Uncertain, 4 = Low severity, 5 = Informational/noise.
+
+---
+
+## Summary statistics
+
+Aggregated across **20 alerts × 3 runs = 60 judgments**.
+
+### Rank distribution
+
+| Rank | Meaning | # judgments |
+|---|---|---|
+| 1 | Critical / clearly dangerous - must be reviewed immediately | 24 |
+| 2 | Likely a real attack or vulnerability - worth review | 21 |
+| 3 | Uncertain / moderate - could go either way | 0 |
+| 4 | Low severity - probably not worth analyst time | 15 |
+| 5 | Clearly informational / noise - not a real threat | 0 |
+
+### Predefined rules usage (per alert)
+
+| Rule ID | # alerts matched |
+|---|---:|
+| R1 | 8 |
+| R4 | 5 |
+| R5 | 5 |
+| R3 | 2 |
+
+### SID mismatch check
+
+Checks whether the model reported the SAME Snort rule sid the alert actually belongs to, rather than one pulled in by mistake from the RAG-retrieved context (`Unknown` = the model's response didn't include a parseable reported_sid for that run).
+
+- Matched: 60/60
+- **Mismatched: 0/60**
+- Unknown: 0/60
+
+### LLM-as-judge (justification quality, 0.0-1.0, judge model: `gemma2:2b`)
+
+- Scored: 60/60
+- **Average score: 0.874** (0.0 = unsupported, 1.0 = fully supported)
+
+### Alerts that disagreed with Snort's own priority (12/20)
+
+| alert_id | msg | snort priority | mismatched in (of 3 runs) |
+|---|---|---|---|
+| 1047 | OS-MOBILE Apple iPhone User-Agent detected | 1 | 3/3 |
+| 1046 | OS-MOBILE Apple iPhone User-Agent detected | 1 | 3/3 |
+| 1045 | OS-MOBILE Android User-Agent detected | 1 | 3/3 |
+| 1043 | SERVER-WEBAPP iChat directory traversal attempt | 2 | 3/3 |
+| 1042 | SERVER-WEBAPP /etc/shadow file access attempt | 2 | 3/3 |
+| 1040 | OS-MOBILE Apple iPhone User-Agent detected | 1 | 3/3 |
+| 1037 | SERVER-WEBAPP iChat directory traversal attempt | 2 | 3/3 |
+| 1035 | SERVER-WEBAPP iChat directory traversal attempt | 2 | 3/3 |
+| 1033 | OS-MOBILE Apple iPhone User-Agent detected | 1 | 3/3 |
+| 1031 | SERVER-WEBAPP iChat directory traversal attempt | 2 | 3/3 |
+| 1029 | SERVER-WEBAPP iChat directory traversal attempt | 2 | 3/3 |
+| 1028 | SERVER-WEBAPP /etc/shadow file access attempt | 2 | 3/3 |
+
+---
+
+## Alert 1047: OS-MOBILE Apple iPhone User-Agent detected
+
+- **Snort priority:** 1 (sid 25520)
+- **AI severity ranks (3 runs):** 4, 4, 4
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R4, R5
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 4 | Low severity - probably not worth analyst time | Yes | Yes | 0.90 |
+| 2 | 4 | Low severity - probably not worth analyst time | Yes | Yes | 0.90 |
+| 3 | 4 | Low severity - probably not worth analyst time | Yes | Yes | 0.90 |
+
+**Run 1 justification:** Matched predefined rule R4: Policy violation (hint: 4) - Policy/compliance-type signatures generally reflect low technical risk. The alert indicates a non-technical risk related to device/User-Agent detection.
+**Run 1 mismatch justification:** The alert's severity is elevated to 4 due to the potential for misuse in corporate environments, where the detection of mobile OS User-Agent strings could indicate unauthorized data collection or privacy violations. This goes beyond the technical risk implied by Snort's original priority of 1.
+**Run 1 judge reasoning:** The justification accurately reflects the rule's focus on policy violations and the fact that the alert is related to device/User-Agent detection, which is generally considered a low-technical risk. The justification clearly connects the alert to the predefined rule's category and highlights the non-technical nature of the risk. It also mentions the rule's relevance to policy violations, which is a key aspect of the alert's classification.  
+
+**Run 2 justification:** Matched predefined rule R4: Policy violation (hint: 4) - Policy/compliance-type signatures generally reflect low technical risk. The alert indicates a non-technical risk related to device/User-Agent detection.
+**Run 2 mismatch justification:** The alert's severity is elevated to 4 due to the potential for misuse in corporate environments, where the detection of mobile OS User-Agent strings could indicate unauthorized data collection or privacy violations. This goes beyond the technical risk implied by Snort's original priority of 1.
+**Run 2 judge reasoning:** The justification accurately reflects the rule's focus on policy violations and the fact that the alert is related to device/User-Agent detection, which is generally considered a low-technical risk. The justification clearly connects the alert to the predefined rule's category and highlights the non-technical nature of the risk. It also mentions the rule's relevance to policy violations, which is a key aspect of the alert's classification.  
+
+**Run 3 justification:** Matched predefined rule R4: Policy violation (hint: 4) - Policy/compliance-type signatures generally reflect low technical risk. The alert indicates a non-technical risk related to device/User-Agent detection.
+**Run 3 mismatch justification:** The alert's severity is elevated to 4 due to the potential for misuse in corporate environments, where the detection of mobile OS User-Agent strings could indicate unauthorized data collection or privacy violations. This goes beyond the technical risk implied by Snort's original priority of 1.
+**Run 3 judge reasoning:** The justification accurately reflects the rule's focus on policy violations and the fact that the alert is related to device/User-Agent detection, which is generally considered a low-technical risk. The justification clearly connects the alert to the predefined rule's category and highlights the non-technical nature of the risk. It also mentions the rule's relevance to policy violations, which is a key aspect of the alert's classification.  
+
+---
+
+## Alert 1046: OS-MOBILE Apple iPhone User-Agent detected
+
+- **Snort priority:** 1 (sid 25520)
+- **AI severity ranks (3 runs):** 4, 4, 4
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R4, R5
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 4 | Low severity - probably not worth analyst time | Yes | Yes | 0.83 |
+| 2 | 4 | Low severity - probably not worth analyst time | Yes | Yes | 0.83 |
+| 3 | 4 | Low severity - probably not worth analyst time | Yes | Yes | 0.83 |
+
+**Run 1 justification:** Matched predefined rule R4: Policy violation (hint: 4) - Policy/compliance-type signatures generally reflect low technical risk. The alert indicates a non-technical risk related to device/User-Agent detection.
+**Run 1 mismatch justification:** The alert's severity is elevated to 4 due to the potential for misuse of sensitive device information, which can lead to targeted attacks or privacy violations. While Snort's priority indicates a low severity (1), the context suggests that the detection of specific device User-Agents can be indicative of a higher risk, especially in a corporate environment where such information could be exploited.
+**Run 1 judge reasoning:** The justification accurately reflects the rule's focus on policy violations and the alert's nature as a non-technical risk related to device/User-Agent detection. The justification correctly identifies the rule's category (R4) and the alert's classification (policy violation). It also references the rule's description of low technical risk, which aligns with the alert's context.  The justification is well-supported by the provided evidence and provides a clear and concise explanation.
+
+**Run 2 justification:** Matched predefined rule R4: Policy violation (hint: 4) - Policy/compliance-type signatures generally reflect low technical risk. The alert indicates a non-technical risk related to device/User-Agent detection.
+**Run 2 mismatch justification:** The alert's severity is elevated to 4 due to the potential for misuse of sensitive device information, which can lead to targeted attacks or privacy violations. While Snort's priority indicates a low severity (1), the context suggests that the detection of specific device User-Agents can be indicative of a higher risk, especially in a corporate environment where such information could be exploited.
+**Run 2 judge reasoning:** The justification accurately reflects the rule's focus on policy violations and the alert's nature as a non-technical risk related to device/User-Agent detection. The justification correctly identifies the rule's category (R4) and the alert's classification (policy violation). It also references the rule's description of low technical risk, which aligns with the alert's context.  The justification is well-supported by the provided evidence and provides a clear and concise explanation.
+
+**Run 3 justification:** Matched predefined rule R4: Policy violation (hint: 4) - Policy/compliance-type signatures generally reflect low technical risk. The alert indicates a non-technical risk related to device/User-Agent detection.
+**Run 3 mismatch justification:** The alert's severity is elevated to 4 due to the potential for misuse of sensitive device information, which can lead to targeted attacks or privacy violations. While Snort's priority indicates a low severity (1), the context suggests that the detection of specific device User-Agents can be indicative of a higher risk, especially in a corporate environment where such information could be exploited.
+**Run 3 judge reasoning:** The justification accurately reflects the rule's focus on policy violations and the alert's nature as a non-technical risk related to device/User-Agent detection. The justification correctly identifies the rule's category (R4) and the alert's classification (policy violation). It also references the rule's description of low technical risk, which aligns with the alert's context.  The justification is well-supported by the provided evidence and provides a clear and concise explanation.
+
+---
+
+## Alert 1045: OS-MOBILE Android User-Agent detected
+
+- **Snort priority:** 1 (sid 25521)
+- **AI severity ranks (3 runs):** 4, 4, 4
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R4, R5
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 4 | Low severity - probably not worth analyst time | Yes | Yes | 0.90 |
+| 2 | 4 | Low severity - probably not worth analyst time | Yes | Yes | 0.90 |
+| 3 | 4 | Low severity - probably not worth analyst time | Yes | Yes | 0.90 |
+
+**Run 1 justification:** The alert indicates a potential corporate privacy violation by detecting an Android User-Agent, which is a low-severity policy violation. The predefined rule R4 matches this alert, indicating a non-technical risk that generally reflects low technical risk.
+**Run 1 mismatch justification:** The alert indicates a potential corporate privacy violation due to the detection of an Android User-Agent, which suggests a higher risk of data leakage or unauthorized access to sensitive information. This type of detection typically warrants a higher severity rank than Snort's original priority of 1, as it could lead to significant privacy breaches and compliance issues.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the predefined rule R4, which explicitly states that this type of detection is a non-technical risk. The justification also correctly links the alert to the rule, highlighting the potential privacy violation and the low-severity nature of the risk. The justification is specific and avoids vague language. It also references the rule's documentation, which provides further context and details about the rule's purpose and scope.  
+
+**Run 2 justification:** The alert indicates a potential corporate privacy violation by detecting an Android User-Agent, which is a low-severity policy violation. The predefined rule R4 matches this alert, indicating a non-technical risk that generally reflects low technical risk.
+**Run 2 mismatch justification:** The alert indicates a potential corporate privacy violation due to the detection of an Android User-Agent, which suggests a higher risk of data leakage or unauthorized access to sensitive information. This type of detection typically warrants a higher severity rank than Snort's original priority of 1, as it could lead to significant privacy breaches and compliance issues.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the predefined rule R4, which explicitly states that this type of detection is a non-technical risk. The justification also correctly links the alert to the rule, highlighting the potential privacy violation and the low-severity nature of the risk. The justification is specific and avoids vague language. It also references the rule's documentation, which provides further context and details about the rule's purpose and scope.  
+
+**Run 3 justification:** The alert indicates a potential corporate privacy violation by detecting an Android User-Agent, which is a low-severity policy violation. The predefined rule R4 matches this alert, indicating a non-technical risk that generally reflects low technical risk.
+**Run 3 mismatch justification:** The alert indicates a potential corporate privacy violation due to the detection of an Android User-Agent, which suggests a higher risk of data leakage or unauthorized access to sensitive information. This type of detection typically warrants a higher severity rank than Snort's original priority of 1, as it could lead to significant privacy breaches and compliance issues.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the predefined rule R4, which explicitly states that this type of detection is a non-technical risk. The justification also correctly links the alert to the rule, highlighting the potential privacy violation and the low-severity nature of the risk. The justification is specific and avoids vague language. It also references the rule's documentation, which provides further context and details about the rule's purpose and scope.  
+
+---
+
+## Alert 1044: SERVER-WEBAPP Compaq Insight directory traversal
+
+- **Snort priority:** 1 (sid 1199)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R1
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+
+**Run 1 justification:** The alert indicates an active exploitation attempt exploiting a known directory traversal vulnerability (CVE-1999-0771) in Compaq Insight, which is classified as a web-application-attack. This is a critical alert as it suggests an active exploitation or malware command-and-control activity, as indicated by the predefined rule R1.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the alert's classification as a web-application attack and correctly links it to the predefined rule R1, which focuses on active exploitation or malware command-and-control activity. The justification also provides a clear explanation of the vulnerability and its potential impact, highlighting the severity of the alert. The justification is specific and avoids generic statements. It also references the document context and rule documentation for further verification. Overall, the justification is well-reasoned and fully supports the alert's severity ranking.
+
+**Run 2 justification:** The alert indicates an active exploitation attempt exploiting a known directory traversal vulnerability (CVE-1999-0771) in Compaq Insight, which is classified as a web-application-attack. This is a critical alert as it suggests an active exploitation or malware command-and-control activity, as indicated by the predefined rule R1.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the alert's classification as a web-application attack and correctly links it to the predefined rule R1, which focuses on active exploitation or malware command-and-control activity. The justification also provides a clear explanation of the vulnerability and its potential impact, highlighting the severity of the alert. The justification is specific and avoids generic statements. It also references the document context and rule documentation for further verification. Overall, the justification is well-reasoned and fully supports the alert's severity ranking.
+
+**Run 3 justification:** The alert indicates an active exploitation attempt exploiting a known directory traversal vulnerability (CVE-1999-0771) in Compaq Insight, which is classified as a web-application-attack. This is a critical alert as it suggests an active exploitation or malware command-and-control activity, as indicated by the predefined rule R1.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the alert's classification as a web-application attack and correctly links it to the predefined rule R1, which focuses on active exploitation or malware command-and-control activity. The justification also provides a clear explanation of the vulnerability and its potential impact, highlighting the severity of the alert. The justification is specific and avoids generic statements. It also references the document context and rule documentation for further verification. Overall, the justification is well-reasoned and fully supports the alert's severity ranking.
+
+---
+
+## Alert 1043: SERVER-WEBAPP iChat directory traversal attempt
+
+- **Snort priority:** 2 (sid 1604)
+- **AI severity ranks (3 runs):** 2, 2, 2
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** (none)
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.83 |
+| 2 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.83 |
+| 3 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.83 |
+
+**Run 1 justification:** The alert indicates a directory traversal attempt on an iChat ROOMS Webserver, which is a known vulnerability (CVE-1999-0897) that can lead to unauthorized access and potential system integrity compromise. The rule documentation describes this as a web-application-activity with a CVSS base score of 5.0, indicating a high severity. The alert matches the rule sid 1604, which is related to directory traversal attempts.
+**Run 1 mismatch justification:** The original Snort priority of 2 suggests a moderate severity level, but given the rule's explanation of a CVSS score of 5.0 and the potential for confidentiality impact, I believe the severity should be elevated to 1, indicating a critical alert.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, including the rule category, CVSS score, and the specific vulnerability (CVE-1999-0897). It also connects the alert to the rule's description and mentions the potential impact of the vulnerability. The justification is specific and avoids generic statements. While it could benefit from a brief mention of the rule's relevance to the alert's context, the provided information is sufficient to support the severity rank.
+
+**Run 2 justification:** The alert indicates a directory traversal attempt on an iChat ROOMS Webserver, which is a known vulnerability (CVE-1999-0897) that can lead to unauthorized access and potential system integrity compromise. The rule documentation describes this as a web-application-activity with a CVSS base score of 5.0, indicating a high severity. The alert matches the rule sid 1604, which is related to directory traversal attempts.
+**Run 2 mismatch justification:** The original Snort priority of 2 suggests a moderate severity level, but given the rule's explanation of a CVSS score of 5.0 and the potential for confidentiality impact, I believe the severity should be elevated to 1, indicating a critical alert.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, including the rule category, CVSS score, and the specific vulnerability (CVE-1999-0897). It also connects the alert to the rule's description and mentions the potential impact of the vulnerability. The justification is specific and avoids generic statements. While it could benefit from a brief mention of the rule's relevance to the alert's context, the provided information is sufficient to support the severity rank.
+
+**Run 3 justification:** The alert indicates a directory traversal attempt on an iChat ROOMS Webserver, which is a known vulnerability (CVE-1999-0897) that can lead to unauthorized access and potential system integrity compromise. The rule documentation describes this as a web-application-activity with a CVSS base score of 5.0, indicating a high severity. The alert matches the rule sid 1604, which is related to directory traversal attempts.
+**Run 3 mismatch justification:** The original Snort priority of 2 suggests a moderate severity level, but given the rule's explanation of a CVSS score of 5.0 and the potential for confidentiality impact, I believe the severity should be elevated to 1, indicating a critical alert.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the rule documentation, including the rule category, CVSS score, and the specific vulnerability (CVE-1999-0897). It also connects the alert to the rule's description and mentions the potential impact of the vulnerability. The justification is specific and avoids generic statements. While it could benefit from a brief mention of the rule's relevance to the alert's context, the provided information is sufficient to support the severity rank.
+
+---
+
+## Alert 1042: SERVER-WEBAPP /etc/shadow file access attempt
+
+- **Snort priority:** 2 (sid 43289)
+- **AI severity ranks (3 runs):** 2, 2, 2
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R3
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.75 |
+| 2 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.75 |
+| 3 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.75 |
+
+**Run 1 justification:** The alert indicates an attempted access to sensitive files (/etc/shadow, /etc/motd) which could lead to information leakage. However, it is classified as 'Attempted Information Leak' with a priority of 2, indicating it is worth reviewing but not necessarily critical. The matched predefined rule R3: Reconnaissance / scanning activity (hint: 3) suggests this is a precursor to an attack but not confirmed compromise.
+**Run 1 mismatch justification:** The severity_rank of 2 is justified as the alert indicates an active attempt to access sensitive information (the /etc/shadow file), which is a clear indication of a potential security breach. The Snort priority of 2 suggests a medium severity, but given the critical nature of the attempted access to sensitive data, a severity_rank of 2 is appropriate to reflect the seriousness of the incident.
+**Run 1 judge reasoning:** The justification provides a reasonable explanation for the alert's severity, referencing the potential for information leakage and the rule's classification as 'Attempted Information Leak'. It also acknowledges the rule's connection to reconnaissance, suggesting a potential attack progression. However, the justification could be strengthened by explicitly linking the rule's relevance to the specific context of the alert (e.g., mentioning the specific file access attempt). This would provide a more concrete and detailed justification for the severity rank.
+
+**Run 2 justification:** The alert indicates an attempted access to sensitive files (/etc/shadow, /etc/motd) which could lead to information leakage. However, it is classified as 'Attempted Information Leak' with a priority of 2, indicating it is worth reviewing but not necessarily critical. The matched predefined rule R3: Reconnaissance / scanning activity (hint: 3) suggests this is a precursor to an attack but not confirmed compromise.
+**Run 2 mismatch justification:** The severity_rank of 2 is justified as the alert indicates an active attempt to access sensitive information (the /etc/shadow file), which is a clear indication of a potential security breach. The Snort priority of 2 suggests a medium severity, but given the critical nature of the attempted access to sensitive data, a severity_rank of 2 is appropriate to reflect the seriousness of the incident.
+**Run 2 judge reasoning:** The justification provides a reasonable explanation for the alert's severity, referencing the potential for information leakage and the rule's classification as 'Attempted Information Leak'. It also acknowledges the rule's connection to reconnaissance, suggesting a potential attack progression. However, the justification could be strengthened by explicitly linking the rule's relevance to the specific context of the alert (e.g., mentioning the specific file access attempt). This would provide a more concrete and detailed justification for the severity rank.
+
+**Run 3 justification:** The alert indicates an attempted access to sensitive files (/etc/shadow, /etc/motd) which could lead to information leakage. However, it is classified as 'Attempted Information Leak' with a priority of 2, indicating it is worth reviewing but not necessarily critical. The matched predefined rule R3: Reconnaissance / scanning activity (hint: 3) suggests this is a precursor to an attack but not confirmed compromise.
+**Run 3 mismatch justification:** The severity_rank of 2 is justified as the alert indicates an active attempt to access sensitive information (the /etc/shadow file), which is a clear indication of a potential security breach. The Snort priority of 2 suggests a medium severity, but given the critical nature of the attempted access to sensitive data, a severity_rank of 2 is appropriate to reflect the seriousness of the incident.
+**Run 3 judge reasoning:** The justification provides a reasonable explanation for the alert's severity, referencing the potential for information leakage and the rule's classification as 'Attempted Information Leak'. It also acknowledges the rule's connection to reconnaissance, suggesting a potential attack progression. However, the justification could be strengthened by explicitly linking the rule's relevance to the specific context of the alert (e.g., mentioning the specific file access attempt). This would provide a more concrete and detailed justification for the severity rank.
+
+---
+
+## Alert 1041: SERVER-WEBAPP Compaq Insight directory traversal
+
+- **Snort priority:** 1 (sid 1199)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R1
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+
+**Run 1 justification:** The alert indicates an active exploitation attempt exploiting a known vulnerability (CVE-1999-0771) in Compaq Insight, which is classified as a web-application-attack. The presence of the content 'content:../' in the alert message suggests an attempt to traverse directories, which is a critical security issue. The predefined rule R1 indicates active exploitation or malware, which aligns with this alert.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately identifies the alert as stemming from a web application attack, referencing the specific vulnerability (CVE-1999-0771) and the presence of the 'content:../' indicator. The justification also correctly links the alert to the predefined rule R1, which focuses on active exploitation or malware. The justification is specific and avoids generic statements. It also provides a clear explanation of why the alert is significant, highlighting the potential for directory traversal attacks to be exploited for malicious purposes. Overall, the justification is strong and well-supported by the provided evidence.
+
+**Run 2 justification:** The alert indicates an active exploitation attempt exploiting a known vulnerability (CVE-1999-0771) in Compaq Insight, which is classified as a web-application-attack. The presence of the content 'content:../' in the alert message suggests an attempt to traverse directories, which is a critical security issue. The predefined rule R1 indicates active exploitation or malware, which aligns with this alert.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately identifies the alert as stemming from a web application attack, referencing the specific vulnerability (CVE-1999-0771) and the presence of the 'content:../' indicator. The justification also correctly links the alert to the predefined rule R1, which focuses on active exploitation or malware. The justification is specific and avoids generic statements. It also provides a clear explanation of why the alert is significant, highlighting the potential for directory traversal attacks to be exploited for malicious purposes. Overall, the justification is strong and well-supported by the provided evidence.
+
+**Run 3 justification:** The alert indicates an active exploitation attempt exploiting a known vulnerability (CVE-1999-0771) in Compaq Insight, which is classified as a web-application-attack. The presence of the content 'content:../' in the alert message suggests an attempt to traverse directories, which is a critical security issue. The predefined rule R1 indicates active exploitation or malware, which aligns with this alert.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately identifies the alert as stemming from a web application attack, referencing the specific vulnerability (CVE-1999-0771) and the presence of the 'content:../' indicator. The justification also correctly links the alert to the predefined rule R1, which focuses on active exploitation or malware. The justification is specific and avoids generic statements. It also provides a clear explanation of why the alert is significant, highlighting the potential for directory traversal attacks to be exploited for malicious purposes. Overall, the justification is strong and well-supported by the provided evidence.
+
+---
+
+## Alert 1040: OS-MOBILE Apple iPhone User-Agent detected
+
+- **Snort priority:** 1 (sid 25520)
+- **AI severity ranks (3 runs):** 4, 4, 4
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R4, R5
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 4 | Low severity - probably not worth analyst time | Yes | Yes | 0.83 |
+| 2 | 4 | Low severity - probably not worth analyst time | Yes | Yes | 0.83 |
+| 3 | 4 | Low severity - probably not worth analyst time | Yes | Yes | 0.83 |
+
+**Run 1 justification:** Matched predefined rule R4: Policy violation (hint: 4) - Policy/compliance-type signatures generally reflect low technical risk. The alert indicates a non-technical risk related to device/User-Agent detection.
+**Run 1 mismatch justification:** The alert's severity is elevated to 4 due to the potential for misuse of sensitive device information, which could lead to targeted attacks or privacy violations. While Snort's priority indicates a low severity (1), the context suggests a higher risk associated with the detection of specific device User-Agents.
+**Run 1 judge reasoning:** The justification accurately reflects the rule documentation and the alert's context. It correctly identifies the alert as a policy violation and links it to the predefined rule R4, which focuses on policy/compliance-type signatures. The justification also mentions the low technical risk associated with such signatures, aligning with the rule's description.  It provides a clear and concise explanation of the alert's nature and its relation to the predefined rule.
+
+**Run 2 justification:** Matched predefined rule R4: Policy violation (hint: 4) - Policy/compliance-type signatures generally reflect low technical risk. The alert indicates a non-technical risk related to device/User-Agent detection.
+**Run 2 mismatch justification:** The alert's severity is elevated to 4 due to the potential for misuse of sensitive device information, which could lead to targeted attacks or privacy violations. While Snort's priority indicates a low severity (1), the context suggests a higher risk associated with the detection of specific device User-Agents.
+**Run 2 judge reasoning:** The justification accurately reflects the rule documentation and the alert's context. It correctly identifies the alert as a policy violation and links it to the predefined rule R4, which focuses on policy/compliance-type signatures. The justification also mentions the low technical risk associated with such signatures, aligning with the rule's description.  It provides a clear and concise explanation of the alert's nature and its relation to the predefined rule.
+
+**Run 3 justification:** Matched predefined rule R4: Policy violation (hint: 4) - Policy/compliance-type signatures generally reflect low technical risk. The alert indicates a non-technical risk related to device/User-Agent detection.
+**Run 3 mismatch justification:** The alert's severity is elevated to 4 due to the potential for misuse of sensitive device information, which could lead to targeted attacks or privacy violations. While Snort's priority indicates a low severity (1), the context suggests a higher risk associated with the detection of specific device User-Agents.
+**Run 3 judge reasoning:** The justification accurately reflects the rule documentation and the alert's context. It correctly identifies the alert as a policy violation and links it to the predefined rule R4, which focuses on policy/compliance-type signatures. The justification also mentions the low technical risk associated with such signatures, aligning with the rule's description.  It provides a clear and concise explanation of the alert's nature and its relation to the predefined rule.
+
+---
+
+## Alert 1039: SERVER-WEBAPP Compaq Insight directory traversal
+
+- **Snort priority:** 1 (sid 1199)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R1
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+
+**Run 1 justification:** The alert indicates an active exploitation attempt exploiting a known vulnerability (CVE-1999-0771) in Compaq Insight, which is classified as a web-application-attack. The presence of the 'content_matches' field with the value '../' confirms an attempt to exploit a directory traversal vulnerability. This is a critical alert as it suggests an active exploitation or malware command-and-control activity, as indicated by the matched predefined rule R1.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the alert's context, including the rule's description, the presence of the 'content_matches' field, and the connection to the analyst's R1 rule. The justification also provides a clear explanation of why the alert is significant, highlighting the potential for active exploitation or malware activity. The justification is specific and avoids generic statements.  
+
+**Run 2 justification:** The alert indicates an active exploitation attempt exploiting a known vulnerability (CVE-1999-0771) in Compaq Insight, which is classified as a web-application-attack. The presence of the 'content_matches' field with the value '../' confirms an attempt to exploit a directory traversal vulnerability. This is a critical alert as it suggests an active exploitation or malware command-and-control activity, as indicated by the matched predefined rule R1.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the alert's context, including the rule's description, the presence of the 'content_matches' field, and the connection to the analyst's R1 rule. The justification also provides a clear explanation of why the alert is significant, highlighting the potential for active exploitation or malware activity. The justification is specific and avoids generic statements.  
+
+**Run 3 justification:** The alert indicates an active exploitation attempt exploiting a known vulnerability (CVE-1999-0771) in Compaq Insight, which is classified as a web-application-attack. The presence of the 'content_matches' field with the value '../' confirms an attempt to exploit a directory traversal vulnerability. This is a critical alert as it suggests an active exploitation or malware command-and-control activity, as indicated by the matched predefined rule R1.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the alert's context, including the rule's description, the presence of the 'content_matches' field, and the connection to the analyst's R1 rule. The justification also provides a clear explanation of why the alert is significant, highlighting the potential for active exploitation or malware activity. The justification is specific and avoids generic statements.  
+
+---
+
+## Alert 1038: SERVER-WEBAPP Compaq Insight directory traversal
+
+- **Snort priority:** 1 (sid 1199)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R1
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+
+**Run 1 justification:** The alert indicates an active exploitation attempt exploiting a known vulnerability (CVE-1999-0771) in Compaq Insight, which is classified as a web-application-attack. This is a critical alert as it suggests an active exploitation or malware command-and-control activity, as indicated by the predefined rule R1.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the alert's classification as a web-application attack, correctly identifies the vulnerability (CVE-1999-0771) and its potential for exploitation, and aligns with the predefined rule R1. The justification also provides a clear explanation of the alert's significance, highlighting the potential for active exploitation or malware command-and-control activity. The justification is specific and avoids generic statements. It also references the rule documentation for further context. Overall, the justification is strong and well-supported by the provided evidence.
+
+**Run 2 justification:** The alert indicates an active exploitation attempt exploiting a known vulnerability (CVE-1999-0771) in Compaq Insight, which is classified as a web-application-attack. This is a critical alert as it suggests an active exploitation or malware command-and-control activity, as indicated by the predefined rule R1.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the alert's classification as a web-application attack, correctly identifies the vulnerability (CVE-1999-0771) and its potential for exploitation, and aligns with the predefined rule R1. The justification also provides a clear explanation of the alert's significance, highlighting the potential for active exploitation or malware command-and-control activity. The justification is specific and avoids generic statements. It also references the rule documentation for further context. Overall, the justification is strong and well-supported by the provided evidence.
+
+**Run 3 justification:** The alert indicates an active exploitation attempt exploiting a known vulnerability (CVE-1999-0771) in Compaq Insight, which is classified as a web-application-attack. This is a critical alert as it suggests an active exploitation or malware command-and-control activity, as indicated by the predefined rule R1.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the alert's classification as a web-application attack, correctly identifies the vulnerability (CVE-1999-0771) and its potential for exploitation, and aligns with the predefined rule R1. The justification also provides a clear explanation of the alert's significance, highlighting the potential for active exploitation or malware command-and-control activity. The justification is specific and avoids generic statements. It also references the rule documentation for further context. Overall, the justification is strong and well-supported by the provided evidence.
+
+---
+
+## Alert 1037: SERVER-WEBAPP iChat directory traversal attempt
+
+- **Snort priority:** 2 (sid 1604)
+- **AI severity ranks (3 runs):** 2, 2, 2
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** (none)
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.83 |
+| 2 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.83 |
+| 3 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.83 |
+
+**Run 1 justification:** The alert indicates a directory traversal attempt on an iChat ROOMS Webserver, which is a web application vulnerability. The rule documentation describes this as a Directory Traversal attack, which can lead to unauthorized access to sensitive files. The alert's classification as 'web-application-activity' and the CVSS scores indicate a moderate to high level of risk. The alert is not critical but requires immediate attention due to the potential for data leakage or unauthorized access.
+**Run 1 mismatch justification:** The original Snort priority of 2 suggests a moderate severity, but given the critical nature of directory traversal attacks and their potential to compromise confidentiality, integrity, and availability, I believe a severity rank of 2 is appropriate. The rule documentation emphasizes the severity of such attacks, with a CVSS base score of 5.0 and an impact score of 2.9, indicating a high level of threat that justifies maintaining the original rank.
+**Run 1 judge reasoning:** The justification is partially supported. It correctly identifies the alert as a directory traversal attempt and links it to a web application vulnerability. It also mentions the potential for data leakage and unauthorized access, which aligns with the rule documentation. However, the justification lacks specific details about the potential impact of the attack, such as the specific files that could be accessed or the potential consequences of successful exploitation. Additionally, the justification mentions the severity level but doesn't explicitly connect it to the evidence provided in the alert data.  A stronger justification would directly reference the rule documentation and the specific evidence from the alert data to support the severity rank.
+
+**Run 2 justification:** The alert indicates a directory traversal attempt on an iChat ROOMS Webserver, which is a web application vulnerability. The rule documentation describes this as a Directory Traversal attack, which can lead to unauthorized access to sensitive files. The alert's classification as 'web-application-activity' and the CVSS scores indicate a moderate to high level of risk. The alert is not critical but requires immediate attention due to the potential for data leakage or unauthorized access.
+**Run 2 mismatch justification:** The original Snort priority of 2 suggests a moderate severity, but given the critical nature of directory traversal attacks and their potential to compromise confidentiality, integrity, and availability, I believe a severity rank of 2 is appropriate. The rule documentation emphasizes the severity of such attacks, with a CVSS base score of 5.0 and an impact score of 2.9, indicating a high level of threat that justifies maintaining the original rank.
+**Run 2 judge reasoning:** The justification is partially supported. It correctly identifies the alert as a directory traversal attempt and links it to a web application vulnerability. It also mentions the potential for data leakage and unauthorized access, which aligns with the rule documentation. However, the justification lacks specific details about the potential impact of the attack, such as the specific files that could be accessed or the potential consequences of successful exploitation. Additionally, the justification mentions the severity level but doesn't explicitly connect it to the evidence provided in the alert data.  A stronger justification would directly reference the rule documentation and the specific evidence from the alert data to support the severity rank.
+
+**Run 3 justification:** The alert indicates a directory traversal attempt on an iChat ROOMS Webserver, which is a web application vulnerability. The rule documentation describes this as a Directory Traversal attack, which can lead to unauthorized access to sensitive files. The alert's classification as 'web-application-activity' and the CVSS scores indicate a moderate to high level of risk. The alert is not critical but requires immediate attention due to the potential for data leakage or unauthorized access.
+**Run 3 mismatch justification:** The original Snort priority of 2 suggests a moderate severity, but given the critical nature of directory traversal attacks and their potential to compromise confidentiality, integrity, and availability, I believe a severity rank of 2 is appropriate. The rule documentation emphasizes the severity of such attacks, with a CVSS base score of 5.0 and an impact score of 2.9, indicating a high level of threat that justifies maintaining the original rank.
+**Run 3 judge reasoning:** The justification is partially supported. It correctly identifies the alert as a directory traversal attempt and links it to a web application vulnerability. It also mentions the potential for data leakage and unauthorized access, which aligns with the rule documentation. However, the justification lacks specific details about the potential impact of the attack, such as the specific files that could be accessed or the potential consequences of successful exploitation. Additionally, the justification mentions the severity level but doesn't explicitly connect it to the evidence provided in the alert data.  A stronger justification would directly reference the rule documentation and the specific evidence from the alert data to support the severity rank.
+
+---
+
+## Alert 1036: SERVER-WEBAPP Compaq Insight directory traversal
+
+- **Snort priority:** 1 (sid 1199)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R1
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+
+**Run 1 justification:** The alert indicates an active exploitation attempt exploiting a known directory traversal vulnerability in Compaq Insight, which is classified as a web-application-attack. The alert matches predefined rule R1, indicating active exploitation or malware. The alert's characteristics and the rule documentation both suggest a critical severity level.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately identifies the alert's nature (active exploitation) and its connection to the predefined rule (R1). The justification also references the severity level and provides relevant context from the rule documentation. The justification is specific and avoids generic statements.  
+
+**Run 2 justification:** The alert indicates an active exploitation attempt exploiting a known directory traversal vulnerability in Compaq Insight, which is classified as a web-application-attack. The rule is matched with predefined rule R1, indicating active exploitation or malware. The alert's characteristics and the rule's documentation support this ranking.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately identifies the alert as stemming from an active exploitation attempt targeting a known vulnerability in Compaq Insight. The justification correctly links the alert to the predefined rule R1, which focuses on active exploitation or malware. The justification also references the rule's documentation, which provides further context and details about the vulnerability and its potential impact. The justification is specific and avoids generic statements. 
+
+**Run 3 justification:** The alert indicates an active exploitation attempt exploiting a known directory traversal vulnerability in Compaq Insight, which is classified as a web-application-attack. The rule is matched with predefined rule R1, indicating active exploitation or malware. The alert's characteristics and the rule's documentation support this ranking.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately identifies the alert as an active exploitation attempt due to the presence of the 'Compaq Insight' vulnerability and the rule's classification as 'web-application-attack'. The justification also correctly links the alert to the predefined rule R1, which is specifically designed to detect active exploitation or malware. The justification is specific and provides a clear rationale for the severity rank.  
+
+---
+
+## Alert 1035: SERVER-WEBAPP iChat directory traversal attempt
+
+- **Snort priority:** 2 (sid 1604)
+- **AI severity ranks (3 runs):** 2, 2, 2
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** (none)
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.90 |
+| 2 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.90 |
+| 3 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.90 |
+
+**Run 1 justification:** The alert indicates a directory traversal attempt on an iChat ROOMS Webserver, which is a known vulnerability (CVE-1999-0897) that can lead to unauthorized access and potential data compromise. The rule matched is 'alert tcp $EXTERNAL_NET any -> $HOME_NET 4080 ( msg:"SERVER-WEBAPP iChat directory traversal attempt"; flow:to_server,established; content:"/../../"; metadata:ruleset community; service:http; reference:cve,1999-0897; classtype:web-application-activity; sid:1604; rev:12; )'.
+**Run 1 mismatch justification:** The original Snort priority of 2 suggests a moderate severity, but given the rule's explanation of a CVSS score of 5.0 and the potential for confidentiality impact, I believe the severity should be elevated to 1, indicating a critical alert.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately identifies the vulnerability (iChat ROOMS Webserver) and its potential impact (unauthorized access and data compromise). It also correctly references the relevant rule (rule_text) and provides specific details about the rule's content and the potential consequences of the attack. The justification is clear, concise, and directly addresses the alert's content. It also references the rule's documentation for further context.  
+
+**Run 2 justification:** The alert indicates a directory traversal attempt on an iChat ROOMS Webserver, which is a known vulnerability (CVE-1999-0897) that can lead to unauthorized access to sensitive files. The rule matched is 'alert tcp $EXTERNAL_NET any -> $HOME_NET 4080 ( msg:"SERVER-WEBAPP iChat directory traversal attempt"; flow:to_server,established; content:"/../../"; metadata:ruleset community; service:http; reference:cve,1999-0897; classtype:web-application-activity; sid:1604; rev:12; )'.
+**Run 2 mismatch justification:** The original Snort priority of 2 suggests a moderate severity level, but given the critical nature of directory traversal attacks and their potential to compromise confidentiality, integrity, and availability, I believe a severity rank of 2 is appropriate. The rule documentation emphasizes the severity of such attacks, including CVSS scores indicating a high impact, which justifies maintaining the original rank despite the expected range.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately identifies the vulnerability (iChat ROOMS Webserver) and its potential impact (unauthorized access to sensitive files). It also correctly references the relevant rule (rule_text) and provides specific details about the alert's content and the rule's reference to CVE-1999-0897. The justification is clear, concise, and directly addresses the alert's content. It also mentions the potential severity of the vulnerability, which is important for understanding the risk level of the alert. Overall, the justification is strong and well-supported by the provided evidence.
+
+**Run 3 justification:** The alert indicates a directory traversal attempt on an iChat ROOMS Webserver, which is a known vulnerability (CVE-1999-0897) that can lead to unauthorized access to sensitive files. The rule matched is 'alert tcp $EXTERNAL_NET any -> $HOME_NET 4080 ( msg:"SERVER-WEBAPP iChat directory traversal attempt"; flow:to_server,established; content:"/../../"; metadata:ruleset community; service:http; reference:cve,1999-0897; classtype:web-application-activity; sid:1604; rev:12; )'.
+**Run 3 mismatch justification:** The original Snort priority of 2 suggests a moderate severity level, but given the critical nature of directory traversal attacks and their potential to compromise confidentiality, integrity, and availability, I believe a severity rank of 2 is appropriate. The rule documentation emphasizes the severity of such attacks, including CVSS scores indicating a high impact, which justifies maintaining the original rank despite the expected range.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately identifies the vulnerability (iChat ROOMS Webserver) and its potential impact (unauthorized access to sensitive files). It also correctly references the relevant rule (rule_text) and provides specific details about the alert's content and the rule's reference to CVE-1999-0897. The justification is clear, concise, and directly addresses the alert's content. It also mentions the rule's impact and the potential consequences of the vulnerability. Overall, the justification is strong and fully supports the alert's severity ranking.
+
+---
+
+## Alert 1034: SERVER-WEBAPP Compaq Insight directory traversal
+
+- **Snort priority:** 1 (sid 1199)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R1
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+
+**Run 1 justification:** The alert indicates an active exploitation attempt (CVE-1999-0771) exploiting a directory traversal vulnerability in Compaq Insight, which is a critical issue. The predefined rule R1 matches this alert as it indicates active exploitation or malware activity. The alert's classification as a web-application-attack and the presence of a CVE ID further support the critical severity ranking.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately reflects the severity of the alert, citing the CVE ID, the rule's classification, and the presence of a critical exploit. The justification also correctly links the alert to the predefined rule R1, which specifically targets active exploitation or malware activity. The justification is specific and detailed, providing a clear and concise explanation for the severity ranking.  
+
+**Run 2 justification:** The alert indicates an active exploitation attempt (R1 matched predefined rule) exploiting a known vulnerability (CVE-1999-0771) in Compaq Insight, which is a critical issue that must be reviewed immediately.
+**Run 2 judge reasoning:** The justification is well-supported. It correctly identifies the alert as an active exploitation attempt based on the rule's description and the presence of a known vulnerability (CVE-1999-0771). The justification also references the severity of the issue and the need for immediate review. The justification is specific and provides a clear rationale for the severity rank assigned by the analyst. 
+
+**Run 3 justification:** The alert indicates an active exploitation attempt (R1 matched predefined rule) exploiting a known vulnerability (CVE-1999-0771) in Compaq Insight, which is a critical issue that must be reviewed immediately.
+**Run 3 judge reasoning:** The justification is well-supported. It correctly identifies the alert as an active exploitation attempt based on the rule's description and the presence of a known vulnerability (CVE-1999-0771). The justification also references the severity of the issue and the need for immediate review. The justification is specific and provides a clear rationale for the severity rank assigned by the analyst.  
+
+---
+
+## Alert 1033: OS-MOBILE Apple iPhone User-Agent detected
+
+- **Snort priority:** 1 (sid 25520)
+- **AI severity ranks (3 runs):** 4, 4, 4
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R4, R5
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 4 | Low severity - probably not worth analyst time | Yes | Yes | 0.90 |
+| 2 | 4 | Low severity - probably not worth analyst time | Yes | Yes | 0.90 |
+| 3 | 4 | Low severity - probably not worth analyst time | Yes | Yes | 0.90 |
+
+**Run 1 justification:** Matched predefined rule R4: Policy violation (hint: 4) - Policy/compliance-type signatures generally reflect low technical risk. The alert indicates a non-technical risk related to device/User-Agent detection.
+**Run 1 mismatch justification:** The alert's severity is elevated to 4 due to the potential for misuse in corporate environments, where detecting mobile OS User-Agents can indicate unauthorized data collection or privacy violations. This context aligns with the rule's intent to flag non-technical risks, despite Snort's original priority suggesting a lower severity.
+**Run 1 judge reasoning:** The justification accurately reflects the rule documentation and the alert's context. It correctly identifies the alert as a policy violation and links it to the predefined rule R4, which focuses on policy/compliance-type signatures. The justification also provides a clear explanation of the risk category, aligning with the rule's classification.  It is well-supported by the provided evidence and provides a concise and accurate justification for the alert's severity.
+
+**Run 2 justification:** Matched predefined rule R4: Policy violation (hint: 4) - Policy/compliance-type signatures generally reflect low technical risk. The alert indicates a non-technical risk related to device/User-Agent detection, which is a policy/compliance issue rather than an immediate security threat.
+**Run 2 mismatch justification:** The alert's severity is elevated to 4 due to the potential for non-technical risk, as indicated by the rule's metadata and the nature of the detected User-Agent. This suggests a higher level of concern than Snort's original priority of 1, which is typically reserved for high-severity threats.
+**Run 2 judge reasoning:** The justification accurately reflects the nature of the alert. It correctly identifies the alert as a policy violation (R4) and explains that these types of signatures generally reflect low technical risk. The justification also references the document context, specifically the rule category and the fact that the alert is related to device/User-Agent detection, which aligns with the predefined rule's focus on policy/compliance issues. The justification is well-supported and specific, providing a clear and concise explanation for the severity rank assigned by the analyst.
+
+**Run 3 justification:** Matched predefined rule R4: Policy violation (hint: 4) - Policy/compliance-type signatures generally reflect low technical risk. The alert indicates a non-technical risk related to device/User-Agent detection, which is a policy/compliance issue rather than an immediate security threat.
+**Run 3 mismatch justification:** The alert's severity is elevated to 4 due to the potential for non-technical risk, as indicated by the rule's metadata and the nature of the detected User-Agent. This suggests a higher level of concern than Snort's original priority of 1, which is typically reserved for high-severity threats.
+**Run 3 judge reasoning:** The justification accurately reflects the nature of the alert. It correctly identifies the alert as a policy violation related to device/User-Agent detection, which is a non-technical risk. The justification also references the predefined rule R4, which aligns with the alert's classification. The justification is well-supported by the provided evidence and provides a clear and concise explanation of the alert's severity level. 
+
+---
+
+## Alert 1032: SERVER-WEBAPP Compaq Insight directory traversal
+
+- **Snort priority:** 1 (sid 1199)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R1
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.95 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+
+**Run 1 justification:** The alert indicates an active exploitation attempt (CVE-1999-0771) exploiting a directory traversal vulnerability in Compaq Insight, which is a critical issue. The predefined rule R1 matches this alert as it indicates active exploitation or malware activity. The alert's classification as a web-application-attack and the presence of a CVE ID further support the critical severity ranking.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately identifies the alert's severity based on the presence of a critical vulnerability (CVE-1999-0771) and its classification as a web-application attack. The justification also correctly links the alert to the predefined rule R1, which specifically targets active exploitation or malware activity. The mention of the CVE ID and the rule's classification further strengthens the justification. The justification is specific and well-reasoned, providing a clear and concise explanation for the severity ranking.
+
+**Run 2 justification:** The alert indicates an active exploitation attempt exploiting a known vulnerability (CVE-1999-0771) in Compaq Insight, which is classified as a web-application-attack. The presence of the content 'content:../' in the alert suggests an attempt to traverse directories, which is a critical security issue. The predefined rule R1 matches this alert's characteristics, indicating active exploitation or malware activity.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately identifies the alert as stemming from a known vulnerability (CVE-1999-0771) and highlights the potential for exploitation. The justification correctly links the alert to the predefined rule R1, which specifically targets active exploitation or malware activity. The justification also provides relevant context about the vulnerability and its potential impact. The score is slightly reduced due to the lack of specific details about the severity of the potential attack, which could be further elaborated upon. Overall, the justification is strong and well-reasoned.
+
+**Run 3 justification:** The alert indicates an active exploitation attempt exploiting a known vulnerability (CVE-1999-0771) in Compaq Insight, which is classified as a web-application-attack. The presence of the content 'content:../' in the alert suggests an attempt to traverse directories, which is a critical security issue. The predefined rule R1 matches this alert's characteristics, indicating active exploitation or malware activity.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately identifies the alert as a potential indication of active exploitation due to the presence of the 'content:../' and the rule's classification as a web-application attack. The justification also correctly links the alert to the predefined rule R1, which specifically targets active exploitation or malware activity. The justification is specific and provides a clear explanation of the alert's significance.  
+
+---
+
+## Alert 1031: SERVER-WEBAPP iChat directory traversal attempt
+
+- **Snort priority:** 2 (sid 1604)
+- **AI severity ranks (3 runs):** 2, 2, 2
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** (none)
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.90 |
+| 2 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.90 |
+| 3 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.90 |
+
+**Run 1 justification:** The alert indicates a directory traversal attempt on an iChat ROOMS Webserver, which is a known vulnerability (CVE-1999-0897) that can lead to unauthorized access and potential system integrity compromise. The rule documentation describes the impact as a CVSS base score of 5.0, indicating a high severity. The alert's characteristics match the predefined rule for directory traversal attempts on web applications.
+**Run 1 mismatch justification:** The original Snort priority of 2 suggests a moderate severity level, but given the rule's explanation of a CVSS score of 5.0 and the potential for confidentiality impact, I believe the severity should be elevated to 2. This reflects the significant risk posed by the vulnerability, aligning with the rule's description of a directory traversal attempt that can lead to unauthorized access and potential data compromise.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the alert's content, including the specific vulnerability (CVE-1999-0897), the potential impact (CVSS score), and the rule documentation that explains the attack vector. The justification also connects the alert to the predefined rule, demonstrating a clear understanding of the alert's context. The justification is specific and avoids generic statements. 
+
+**Run 2 justification:** The alert indicates a directory traversal attempt on an iChat ROOMS Webserver, which is a known vulnerability (CVE-1999-0897) that can lead to unauthorized access and potential system integrity compromise. The rule matched is 'alert tcp $EXTERNAL_NET any -> $HOME_NET 4080 ( msg:"SERVER-WEBAPP iChat directory traversal attempt"; flow:to_server,established; content:"/../../"; metadata:ruleset community; service:http; reference:cve,1999-0897; classtype:web-application-activity; sid:1604; rev:12; )'.
+**Run 2 mismatch justification:** The original Snort priority of 2 suggests a moderate severity level, but given the critical nature of directory traversal attacks and their potential to compromise confidentiality, integrity, and availability, I have rated this alert as 2. The rule documentation clearly states the impact as CVSS base score 5.0, indicating a high severity. The rule explanation emphasizes the severity of the vulnerability and the ease of attack, which justifies a higher severity rank.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately identifies the vulnerability (iChat ROOMS Webserver) and its potential impact (unauthorized access and system compromise). It also correctly references the relevant rule (rule_id 1604) and provides specific details about the alert's content and the rule's explanation. The justification is clear, concise, and directly addresses the alert's content. It also references the CVE-1999-0897 vulnerability, which is a key piece of information for understanding the alert's significance.  
+
+**Run 3 justification:** The alert indicates a directory traversal attempt on an iChat ROOMS Webserver, which is a known vulnerability (CVE-1999-0897) that can lead to unauthorized access and potential system integrity compromise. The rule matched is 'alert tcp $EXTERNAL_NET any -> $HOME_NET 4080 ( msg:"SERVER-WEBAPP iChat directory traversal attempt"; flow:to_server,established; content:"/../../"; metadata:ruleset community; service:http; reference:cve,1999-0897; classtype:web-application-activity; sid:1604; rev:12; )'.
+**Run 3 mismatch justification:** The original Snort priority of 2 suggests a moderate severity level, but given the critical nature of directory traversal attacks and their potential to compromise confidentiality, integrity, and availability, I have rated this alert as 2. The rule documentation clearly states the impact as CVSS base score 5.0, indicating a high severity. The rule explanation emphasizes the severity of the vulnerability and the ease of attack, which justifies a higher severity rank.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately identifies the vulnerability (iChat ROOMS Webserver) and its potential impact (unauthorized access and system compromise). It also correctly references the relevant rule (rule_id 1604) and provides specific details about the alert's content and the rule's explanation. The justification is clear, concise, and directly addresses the provided evidence. It also mentions the CVE-1999-0897 vulnerability, which is a key element of the alert's context.  
+
+---
+
+## Alert 1030: SERVER-WEBAPP Compaq Insight directory traversal
+
+- **Snort priority:** 1 (sid 1199)
+- **AI severity ranks (3 runs):** 1, 1, 1
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R1
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+| 2 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+| 3 | 1 | Critical / clearly dangerous - must be reviewed immediately | Yes | No | 0.90 |
+
+**Run 1 justification:** The alert indicates an active exploitation attempt exploiting a known vulnerability (CVE-1999-0771) in Compaq Insight, which is classified as a web-application-attack. The presence of the 'content_matches' field with the value '../' confirms an attempt to exploit a directory traversal vulnerability. This is a critical alert as it suggests an active exploitation or malware command-and-control activity, as indicated by the predefined rule R1.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the alert's content, the rule documentation, and the analyst's understanding of the severity of the alert. The justification clearly links the alert to the predefined rule, specifically mentioning the 'content_matches' field and the 'flow' field. The justification also correctly identifies the severity of the alert as critical due to the presence of a known vulnerability and the potential for active exploitation. The justification is specific and well-reasoned, providing a clear and concise explanation for the severity rank assigned by the analyst. 
+
+**Run 2 justification:** The alert indicates an active exploitation attempt exploiting a known directory traversal vulnerability in Compaq Insight, which is classified as a web-application-attack. The rule is matched with predefined rule R1, indicating active exploitation or malware. The alert's characteristics and the rule's documentation both suggest a critical threat that must be reviewed immediately.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately reflects the alert's nature, referencing the rule's documentation and the analyst's understanding of the alert's significance. The justification clearly links the alert to the rule, the severity, and the potential threat. It also provides a concise and relevant explanation for the justification.  
+
+**Run 3 justification:** The alert indicates an active exploitation attempt exploiting a known directory traversal vulnerability in Compaq Insight, which is classified as a web-application-attack. The rule is matched with predefined rule R1, indicating active exploitation or malware. The alert's characteristics and the rule's documentation both suggest a critical threat that must be reviewed immediately.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately reflects the alert's nature, referencing the rule's documentation and the analyst's understanding of the alert's significance. The justification clearly links the alert to the rule, the severity, and the potential threat. It also mentions the rule's classification and the analyst's reasoning for the severity rank.  The justification is specific and well-reasoned, making it a strong justification for the given severity rank.
+
+---
+
+## Alert 1029: SERVER-WEBAPP iChat directory traversal attempt
+
+- **Snort priority:** 2 (sid 1604)
+- **AI severity ranks (3 runs):** 2, 2, 2
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** (none)
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.90 |
+| 2 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.90 |
+| 3 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.90 |
+
+**Run 1 justification:** The alert indicates a directory traversal attempt on an iChat ROOMS Webserver, which is a known vulnerability (CVE-1999-0897) that can lead to unauthorized access and potential system integrity compromise. The rule documentation describes this as a web-application-activity with a CVSS base score of 5.0, indicating a moderate to high severity. The alert's characteristics match the predefined rule for directory traversal attempts on web applications.
+**Run 1 mismatch justification:** The original Snort priority of 2 suggests a moderate severity, but given the critical nature of directory traversal attacks and their potential to compromise confidentiality, integrity, and availability, I have rated this alert as 2. The rule documentation clearly states the impact as CVSS 5.0, indicating a high severity, which justifies maintaining the original rank despite the expected new rank range.
+**Run 1 judge reasoning:** The justification is well-supported. It accurately references the alert's content, including the specific vulnerability (CVE-1999-0897), the potential impact (unauthorized access, system compromise), and the rule documentation that supports the severity. The justification also connects the alert's characteristics to the predefined rule, demonstrating a clear understanding of the alert's context.  It provides a concise and relevant explanation for the severity rank assigned by the analyst.
+
+**Run 2 justification:** The alert indicates a directory traversal attempt on an iChat ROOMS Webserver, which is a known vulnerability (CVE-1999-0897) that can lead to unauthorized access and potential system integrity compromise. The rule documentation describes this as a web-application-activity with a CVSS base score of 5.0, indicating a moderate to high severity. The alert's characteristics match the predefined rule for directory traversal attempts on web applications.
+**Run 2 mismatch justification:** The original Snort priority of 2 suggests a moderate severity level, but given the critical nature of directory traversal vulnerabilities, which can lead to severe confidentiality, integrity, and availability impacts, I believe a severity rank of 2 is appropriate. The rule explanation for iChat directory traversal mentions a CVSS base score of 5.0, indicating a high severity level. However, the Snort priority does not account for the potential for high-impact exploitation, which is why I maintain the severity rank of 2.
+**Run 2 judge reasoning:** The justification is well-supported. It accurately references the alert's content, including the specific vulnerability (CVE-1999-0897), the potential impact (unauthorized access, system compromise), and the rule documentation that supports the severity. The justification also connects the alert's characteristics to the predefined rule, demonstrating a clear understanding of the alert's context.  It provides a concise and accurate explanation of the justification. 
+
+**Run 3 justification:** The alert indicates a directory traversal attempt on an iChat ROOMS Webserver, which is a known vulnerability (CVE-1999-0897) that can lead to unauthorized access and potential system integrity compromise. The rule documentation describes this as a web-application-activity with a CVSS base score of 5.0, indicating a moderate to high severity. The alert's characteristics match the predefined rule for directory traversal attempts on web applications.
+**Run 3 mismatch justification:** The original Snort priority of 2 suggests a moderate severity level, but given the critical nature of directory traversal vulnerabilities, which can lead to severe confidentiality, integrity, and availability impacts, I believe a severity rank of 2 is appropriate. The rule explanation for iChat directory traversal mentions a CVSS base score of 5.0, indicating a high severity level. However, the Snort priority does not account for the potential for high-impact exploitation, which is why I maintain the severity rank of 2.
+**Run 3 judge reasoning:** The justification is well-supported. It accurately references the alert's content, including the specific vulnerability (CVE-1999-0897), the potential impact (unauthorized access, system compromise), and the rule documentation that supports the severity. The justification also connects the alert's characteristics to the predefined rule, demonstrating a clear understanding of the alert's context.  It provides a concise and accurate explanation of the justification. 
+
+---
+
+## Alert 1028: SERVER-WEBAPP /etc/shadow file access attempt
+
+- **Snort priority:** 2 (sid 43289)
+- **AI severity ranks (3 runs):** 2, 2, 2
+- **Consistent across 3 runs:** ✅ Yes
+- **Matched predefined rules:** R3
+
+| Run | Rank | Meaning | SID match | Mismatch vs Snort | Judge score |
+|---|---|---|---|---|---|
+| 1 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.83 |
+| 2 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.75 |
+| 3 | 2 | Likely a real attack or vulnerability - worth review | Yes | Yes | 0.75 |
+
+**Run 1 justification:** The alert indicates an attempted access to sensitive files (/etc/shadow, /etc/motd) which could lead to information leakage. However, it is a reconnaissance activity, not a confirmed compromise. The predefined rule R3 matches this alert, indicating it is a reconnaissance attempt.
+**Run 1 mismatch justification:** The severity rank of 2 is justified due to the high impact of an attempted Information Leak, which is a critical security concern. The rule's classification as 'attempted-recon' indicates a serious attempt to exploit vulnerabilities, which warrants a high severity rank. The normal expected range for Snort priority 2 is 3-3, but the critical nature of the alert justifies a rank of 2.
+**Run 1 judge reasoning:** The justification is partially supported. It correctly identifies the alert as a reconnaissance attempt and links it to the predefined rule R3.  However, the justification could be strengthened by explicitly mentioning the rule's connection to the specific context of the alert. For example, the justification could mention that the rule specifically targets attempts to access sensitive files, which aligns with the alert's description. Additionally, the justification could mention the potential impact of such an attempt, such as information leakage, which is a key aspect of the alert's severity.  
+
+**Run 2 justification:** The alert indicates an attempted access to sensitive files (/etc/shadow, /etc/motd) which could lead to information leakage. However, it is a reconnaissance activity, not a confirmed compromise. Matched predefined rule R3: Reconnaissance / scanning activity (hint: 3).
+**Run 2 mismatch justification:** The original Snort priority of 2 suggests a moderate level of severity, but given the critical nature of accessing the /etc/shadow file, which contains sensitive user information, I believe the severity should be elevated to 1. This file is crucial for system security, and any attempt to access it is a high-severity threat that warrants immediate attention.
+**Run 2 judge reasoning:** The justification is partially supported. It correctly identifies the alert as a reconnaissance activity and links it to the potential for information leakage. However, it lacks a more detailed explanation of the connection between the rule and the severity. The justification mentions the rule's connection to 'attempted-recon' and the potential for information leakage, but it could benefit from a more explicit explanation of how the rule's criteria directly support the severity. For example, the justification could mention the rule's focus on accessing sensitive files and the potential for unauthorized access, which aligns with the severity level.  
+
+**Run 3 justification:** The alert indicates an attempted access to sensitive files (/etc/shadow, /etc/motd) which could lead to information leakage. However, it is a reconnaissance activity, not a confirmed compromise. Matched predefined rule R3: Reconnaissance / scanning activity (hint: 3).
+**Run 3 mismatch justification:** The original Snort priority of 2 suggests a moderate level of severity, but given the critical nature of accessing the /etc/shadow file, which contains sensitive user information, I believe the severity should be elevated to 1. This file is crucial for system security, and any attempt to access it is a high-severity threat that warrants immediate attention.
+**Run 3 judge reasoning:** The justification is partially supported. It correctly identifies the alert as a reconnaissance activity and links it to the potential for information leakage. However, it lacks a more detailed explanation of the connection between the rule and the severity. The justification mentions the rule's connection to 'attempted-recon' and the potential for information leakage, but it could benefit from a more explicit explanation of how the rule's criteria directly support the severity. For example, the justification could mention the rule's focus on accessing sensitive files and the potential for unauthorized access, which aligns with the severity level.  
+
+---

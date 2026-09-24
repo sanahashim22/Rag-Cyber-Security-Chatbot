@@ -1,0 +1,61 @@
+{
+  "scale_meaning": {
+    "1": "Critical / clearly dangerous - must be reviewed immediately",
+    "2": "Likely a real attack or vulnerability - worth review",
+    "3": "Uncertain / moderate - could go either way",
+    "4": "Low severity - probably not worth analyst time",
+    "5": "Clearly informational / noise - not a real threat"
+  },
+  "note": "This is a DRAFT rubric. Review/edit before treating it as final - domain judgement (from you / your supervisor) should override these where they disagree.",
+  "rules": [
+    {
+      "id": "R1",
+      "description": "Active exploitation / malware / C2 indicators",
+      "match": { "classtype_any": ["trojan-activity", "attempted-admin", "shellcode-detect", "attempted-user", "web-application-attack", "successful-admin", "attempted-dos", "denial-of-service"] },
+      "severity_hint": 1,
+      "rationale": "Classtype indicates active exploitation or malware command-and-control activity, not passive traffic."
+    },
+    {
+      "id": "R2",
+      "description": "Attack-signature language in the alert message",
+      "match": { "message_contains_any": ["exploit", "overflow", "backdoor", "ransomware", "shellcode", "sql injection"] },
+      "severity_hint": 1,
+      "rationale": "The alert message itself names a known attack technique."
+    },
+    {
+      "id": "R3",
+      "description": "Reconnaissance / scanning activity",
+      "match": { "classtype_any": ["attempted-recon", "network-scan", "protocol-command-decode"] },
+      "severity_hint": 3,
+      "rationale": "Reconnaissance is a precursor to an attack but is not itself confirmed compromise."
+    },
+    {
+      "id": "R4",
+      "description": "Policy violation (non-technical risk)",
+      "match": { "classtype_any": ["policy-violation"] },
+      "severity_hint": 4,
+      "rationale": "Policy/compliance-type signatures (e.g. device/User-Agent detection) generally reflect low technical risk."
+    },
+    {
+      "id": "R5",
+      "description": "Purely informational signature",
+      "match": { "message_contains_any": ["informational", "user-agent detected"] },
+      "severity_hint": 5,
+      "rationale": "Signature is descriptive/observational rather than attack-indicating."
+    },
+    {
+      "id": "R6",
+      "description": "Targets a sensitive admin/management or database service",
+      "match": { "dest_port_in": [22, 23, 3389, 445, 3306, 1433, 5432] },
+      "severity_escalation": 1,
+      "rationale": "Destination port is a privileged administrative or database service - raises concern by one tier regardless of the base classtype."
+    },
+    {
+      "id": "R7",
+      "description": "CVE reference present",
+      "match": { "message_or_docs_contains_any": ["cve-"] },
+      "severity_escalation": 1,
+      "rationale": "A referenced CVE indicates a known, documented vulnerability rather than a generic heuristic match."
+    }
+  ]
+}
