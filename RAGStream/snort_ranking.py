@@ -74,10 +74,11 @@ single Snort/Suricata IDS alert occurrence at a time.
 You will be given:
   - The full raw data for exactly this one alert (and its rule documentation).
   - Relevant excerpts retrieved from cybersecurity standards documents (NIST \
-CSF 2.0, ISO/IEC 27001, and any other reference documents provided).
-  - Any predefined rules that matched this alert's characteristics.
+CSF 2.0, ISO/IEC 27001, Snort rule documentation, and any other reference \
+documents provided).
 
-Judge THIS ONE alert using ALL of the above. Rank it on a scale of 1 to 5:
+Judge THIS ONE alert using ALL of the above and your own security expertise. \
+Rank it on a scale of 1 to 5:
   1 = Critical / clearly dangerous - must be reviewed immediately
   2 = Likely a real attack or vulnerability - worth review
   3 = Uncertain / moderate - could go either way
@@ -87,12 +88,12 @@ Judge THIS ONE alert using ALL of the above. Rank it on a scale of 1 to 5:
 (Note: this is the OPPOSITE direction from a 1=noise/5=critical scale - here \
 1 is the MOST severe, 5 is the LEAST severe.)
 
-Use your own judgement, but your justification MUST explicitly say:
-  - which matched predefined rule(s), if any, influenced your decision, and
-  - which specific piece of the retrieved document context (name the \
-document and the relevant control/clause if you can) supports your decision.
-If neither the predefined rules nor the retrieved context say anything \
-relevant, say so plainly and explain your reasoning from the alert data alone.
+Use your own judgement, but your justification MUST explicitly say which \
+specific piece of the retrieved document context (name the document and the \
+relevant control/clause if you can) supports your decision. If the \
+retrieved context doesn't say anything relevant, say so plainly and explain \
+your reasoning from the alert data alone (classtype, message, CVE \
+references, destination port, etc.).
 
 You must also report which exact Snort rule sid you judged this alert \
 against. Read it from the ALERT DATA given to you (alert.sid / \
@@ -101,7 +102,7 @@ that happens to appear in the retrieved document context.
 
 Respond with ONLY a single JSON object, nothing else, with exactly these keys:
 {"severity_rank": <integer 1-5>, "justification": "<2-4 sentences citing the \
-predefined rule(s) and/or document evidence that led to this rank>", \
+document evidence and/or alert data that led to this rank>", \
 "metrics_used": ["<specific fields/evidence you used>"], "reported_sid": \
 <integer - the sid of THIS alert's own Snort rule, from the ALERT DATA>}
 """
@@ -110,19 +111,18 @@ JUDGE_SYSTEM_PROMPT = """You are an independent SOC quality-assurance reviewer. 
 You did NOT write the ranking below - your only job is to grade how well it \
 is actually supported by the evidence, not to re-rank the alert yourself.
 
-You will be given: the original alert data, the matched predefined rules, \
-the retrieved document context, and another analyst's severity_rank + \
-justification for this alert.
+You will be given: the original alert data, the retrieved document context, \
+and another analyst's severity_rank + justification for this alert.
 
 Score the JUSTIFICATION (not the numeric rank itself) on a continuous scale \
 from 0.0 to 1.0, where:
   1.0 = justification is fully and specifically supported by the cited \
-predefined rule(s) and/or document context (correct document/clause names, \
+document context and/or alert data (correct document/clause names, \
 accurate claims, nothing invented)
   0.5 = partially supported - some reasonable reasoning but vague, generic, \
 or only loosely tied to the actual evidence provided
   0.0 = not supported at all - justification is generic filler, contradicts \
-the evidence, or cites a document/rule/control that isn't actually relevant \
+the evidence, or cites a document/control that isn't actually relevant \
 or doesn't say what the justification claims it says
 
 Use fine-grained values (e.g. 0.16, 0.42, 0.83), not just 0/0.5/1.
@@ -142,10 +142,10 @@ your scale is 1-5 (1=critical, 5=noise). The normal expected mapping is:
   Snort 3 -> new rank 4 or 5
 
 Your rank fell outside that expected range for this alert. Explain, using \
-SOLID evidence from the predefined rules and/or the retrieved document \
-context (name the document/control/clause), why you still believe your \
-rank is correct despite disagreeing with Snort's own priority. Do not just \
-restate your original justification - explain the disagreement specifically.
+SOLID evidence from the retrieved document context and/or the alert data \
+(name the document/control/clause), why you still believe your rank is \
+correct despite disagreeing with Snort's own priority. Do not just restate \
+your original justification - explain the disagreement specifically.
 
 Respond with ONLY a JSON object: {"mismatch_justification": "<2-4 sentences>"}
 """
@@ -315,6 +315,14 @@ def call_ollama_json(ollama_client, model: str, system_prompt: str, user_prompt:
                 messages=messages,
                 stream=False,
                 format="json",
+                # Reasoning models (e.g. gemma4:e2b) generate a hidden
+                # "thinking" chain-of-thought that shares the SAME
+                # num_predict token budget as the actual answer - on a long
+                # prompt like ours, thinking alone can consume the whole
+                # budget, truncating the visible JSON mid-string and making
+                # it unparseable. think=False skips that entirely and is a
+                # harmless no-op on models that don't support it.
+                think=False,
                 # num_predict caps how many tokens the model can generate -
                 # our JSON responses never need more than a few hundred, so
                 # this bounds worst-case generation time on top of the
@@ -330,11 +338,10 @@ def call_ollama_json(ollama_client, model: str, system_prompt: str, user_prompt:
 
 # ── Core ranking ─────────────────────────────────────────────────────────────
 
-def judge_justification(ollama_client, payload_record: Dict, matched_rules_text: str,
+def judge_justification(ollama_client, payload_record: Dict,
                          context: str, rank: int, justification: str) -> Tuple[Any, Any]:
     judge_prompt = (
         f"ALERT DATA:\n{json.dumps(payload_record, indent=2)}\n\n"
-        f"MATCHED PREDEFINED RULES:\n{matched_rules_text}\n\n"
         f"RETRIEVED DOCUMENT CONTEXT:\n{context[:4000]}\n\n"
         f"ANALYST'S severity_rank: {rank}\n"
         f"ANALYST'S justification: {justification}\n\n"
@@ -374,22 +381,19 @@ def rank_one_alert(ollama_client, ranking_model: str, alert_entry: Dict,
         "alert": alert_entry.get("alert"),
         "rule_documentation": alert_entry.get("rule_documentation"),
     }
-    matched_rules_text = (
-        "\n".join(
-            f"- {r['id']}: {r['description']} "
-            f"(hint: {r.get('severity_hint', r.get('severity_escalation'))}) - {r['rationale']}"
-            for r in matched_rules
-        )
-        or "(no predefined rule matched this alert)"
-    )
 
+    # NOTE: predefined_rules.json's severity_hint is deliberately NOT given
+    # to the model - the rank must come from the model's own reading of the
+    # alert data + retrieved NIST/ISO/rule_docs context, not from a
+    # hand-written rubric. matched_rules is still computed and returned
+    # below (see matched_predefined_rules) purely for your own reference/
+    # comparison against what the model concluded independently.
     user_prompt = (
-        "Rank this ONE alert 1-5 (1=critical, 5=noise) using the alert data, "
-        "the matched predefined rules, and the retrieved document context below. "
+        "Rank this ONE alert 1-5 (1=critical, 5=noise) using the alert data "
+        "and the retrieved document context below. "
         "Respond with ONLY a JSON object with exactly the keys severity_rank, "
         "justification, metrics_used, reported_sid:\n\n"
         f"ALERT DATA:\n{json.dumps(payload_record, indent=2)}\n\n"
-        f"MATCHED PREDEFINED RULES:\n{matched_rules_text}\n\n"
         f"RETRIEVED DOCUMENT CONTEXT (relevance {relevance_score:.3f}):\n{context[:4000]}\n"
     )
 
@@ -470,7 +474,6 @@ def rank_one_alert(ollama_client, ranking_model: str, alert_entry: Dict,
                 f"Original alert + your ranking:\n{json.dumps(payload_record, indent=2)}\n\n"
                 f"Your severity_rank: {rank}\nSnort priority: {snort_priority} "
                 f"(expected new-rank range: {expected[0]}-{expected[1]})\n\n"
-                f"Matched predefined rules:\n{matched_rules_text}\n\n"
                 f"Retrieved document context:\n{context[:3000]}\n"
             )
             try:
@@ -484,7 +487,7 @@ def rank_one_alert(ollama_client, ranking_model: str, alert_entry: Dict,
                 mismatch_justification = f"(mismatch justification call failed: {e})"
 
     judge_score, judge_reasoning = judge_justification(
-        ollama_client, payload_record, matched_rules_text, context, rank, justification,
+        ollama_client, payload_record, context, rank, justification,
     )
 
     return {
