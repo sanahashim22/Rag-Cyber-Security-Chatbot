@@ -1,6 +1,9 @@
 # 🔒 Cybersecurity Standards RAG System
 
-An AI-powered question-answering system built for cybersecurity standards and frameworks. Currently supports **NIST Cybersecurity Framework (CSF) 2.0** and is designed to easily accommodate additional standards as they are added.
+An AI-powered assistant for cybersecurity standards and frameworks that also ranks Snort IDS alert severity. It does two things:
+
+1. **Standards Q&A**: ask questions about **NIST Cybersecurity Framework (CSF) 2.0** and **ISO/IEC 27001:2022**, with answers grounded in the actual standard documents via RAG retrieval. Designed to easily accommodate additional standards as they're added.
+2. **Snort alert severity ranking**: attach a Snort/Suricata alerts JSON export in the chat (the 📎 attach icon), and each alert gets ranked 1-5 for severity, run 3 times per alert to check consistency, with an independent model scoring the justification quality.
 
 Built with **Streamlit**, **Ollama**, and local LLMs — fully offline, private, and free to run.
 
@@ -10,17 +13,23 @@ Built with **Streamlit**, **Ollama**, and local LLMs — fully offline, private,
 
 ```
 RAG-with-5-models/
-├── RAGStream/          ← Main Streamlit web app (start here)
+├── RAGStream/                      ← Main Streamlit web app (start here)
 │   ├── RAGStream.py
+│   ├── snort_ranking.py            ← Snort alert severity ranking pipeline
+│   ├── predefined_rules.json       ← Reference-only rule rubric (not shown to the models)
 │   ├── load_documents.py
 │   ├── memory_monitor.py
-│   ├── docs/           ← PUT YOUR PDF/TXT FILES HERE
+│   ├── docs/                       ← PUT YOUR PDF/TXT/JSON FILES HERE (knowledge base)
+│   │   ├── NIST.CSWP.29.pdf
+│   │   ├── ISO_IEC-27001-2022.pdf
+│   │   ├── rule_docs_preprocessed_by_sid.json   ← Snort rule documentation, embedded for retrieval
 │   │   └── HOW_TO_ADD_CONTENT.txt
 │   └── pyproject.toml
-├── ConvoRAG/           ← Conversational RAG (command-line)
-├── SimpleRAG/          ← Basic single-turn RAG (command-line)
-├── SemanticSeek/       ← Semantic search only (command-line)
-├── CosineExplorer/     ← Cosine similarity visualizer (command-line)
+├── data/                           ← Sample Snort alerts export + model comparison reports
+├── ConvoRAG/                       ← Conversational RAG (command-line)
+├── SimpleRAG/                      ← Basic single-turn RAG (command-line)
+├── SemanticSeek/                   ← Semantic search only (command-line)
+├── CosineExplorer/                 ← Cosine similarity visualizer (command-line)
 └── README.md
 ```
 
@@ -46,7 +55,23 @@ In the browser, click **"Restart & Reload Documents"** in the sidebar.
 The system will automatically detect and load all files in the `docs/` folder.
 You can have **multiple documents at the same time** — all are combined into one knowledge base.
 
-**Supported formats:** `.pdf` and `.txt`
+**Supported formats:** `.pdf`, `.txt`, and `.json` (a sid-keyed dict of Snort rule docs, like `rule_docs_preprocessed_by_sid.json`, is split into one retrievable block per rule).
+
+---
+
+## Snort Alert Severity Ranking
+
+Attach a Snort/Suricata alerts JSON export using the 📎 attach icon in the chat box (no special prompt needed: it's auto-detected by checking for fields like `sid`, `priority`, or an `alerts` list). Files with 10 or fewer alerts are processed automatically; larger files ask you to confirm how many to process first.
+
+For each alert, the app:
+1. Retrieves relevant context from the knowledge base (NIST CSF 2.0, ISO/IEC 27001, and the embedded Snort rule docs) via the same RAG pipeline used for chat.
+2. Asks the selected LLM to rank the alert's severity 1-5 (1 = Critical, 5 = Informational/noise), citing the retrieved evidence, **not** a predefined rule rubric; the model reasons from the alert data and retrieved documents on its own.
+3. Repeats this 3 times per alert to check whether the model's judgment is consistent.
+4. Has a second, independent model score the justification's quality (0.0-1.0), and flags any case where the rank disagrees with Snort's own priority.
+
+Results are shown in the chat as a formatted report (rank distribution, SID-match check, judge scores, per-alert justifications) with a button to download the full report as `.txt`.
+
+`predefined_rules.json` is loaded in code but is **not** shown to the ranking/judge models; it's kept only as a separate, documented reference point you can compare the models' independent answers against.
 
 ---
 
@@ -82,11 +107,8 @@ poetry install
 poetry add pdfplumber
 ```
 
-### Place your PDF in the docs folder
-```bash
-# Copy your NIST CSF 2.0 PDF into:
-RAGStream/docs/NIST.CSWP.29.pdf
-```
+### Knowledge base documents
+NIST CSF 2.0, ISO/IEC 27001:2022, and the Snort rule docs are already included in `RAGStream/docs/`: no setup needed.
 
 ### Run the app
 ```bash
@@ -126,10 +148,10 @@ python CosineExplorer.py
 
 | Standard | Status |
 |---|---|
-| NIST CSF 2.0 | ✅ Built-in + PDF upload |
-| ISO 27001 | 📥 Add PDF to docs/ folder |
+| NIST CSF 2.0 | ✅ Built-in |
+| ISO/IEC 27001:2022 | ✅ Built-in |
 | NIST SP 800-53 | 📥 Add PDF to docs/ folder |
-| Any other standard | 📥 Add PDF or TXT to docs/ folder |
+| Any other standard | 📥 Add PDF, TXT, or JSON to docs/ folder |
 
 ---
 
