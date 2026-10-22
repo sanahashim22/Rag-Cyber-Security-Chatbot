@@ -312,7 +312,7 @@ class ConvoRAG:
                 if not vector_indices:
                     return "No relevant documents found.", 0.0
 
-                result = "\n".join([self.documents[i] for i in vector_indices])
+                result = "\n\n<<<CHUNK_BREAK>>>\n\n".join([self.documents[i] for i in vector_indices])
                 top_score = vector_scores[0] if vector_scores else 0.0
 
                 st.write(
@@ -361,7 +361,7 @@ class ConvoRAG:
                 if not sorted_indices:
                     return "No relevant documents found.", 0.0
                     
-                result = "\n".join([self.documents[i] for i in sorted_indices])
+                result = "\n\n<<<CHUNK_BREAK>>>\n\n".join([self.documents[i] for i in sorted_indices])
                 
                 # --- FIX: relevance score ab actual RRF combined score se aata hai ---
                 # Pehle yeh disconnected raw vector/bm25 scores (aur ek buggy bm25_norm
@@ -401,7 +401,7 @@ class ConvoRAG:
                 if not topk_indices:
                     return "No relevant documents found.", 0.0
 
-                result = "\n".join([self.documents[i] for i in topk_indices])
+                result = "\n\n<<<CHUNK_BREAK>>>\n\n".join([self.documents[i] for i in topk_indices])
                 return result, boosted_scores[topk_indices[0]] if topk_indices else 0.0
                 
         except Exception as e:
@@ -897,12 +897,6 @@ def initialize_session_state():
         st.session_state.loaded_doc_names = []
     if "search_mode" not in st.session_state:
         st.session_state.search_mode = "hybrid"  # "hybrid" or "vector"
-    if "predefined_rules" not in st.session_state:
-        try:
-            st.session_state.predefined_rules = snort_ranking.load_predefined_rules()
-        except Exception as e:
-            st.session_state.predefined_rules = []
-            st.warning(f"Could not load predefined_rules.json: {e}")
     if "pending_alert_entries" not in st.session_state:
         st.session_state.pending_alert_entries = None
     if "awaiting_alert_confirmation" not in st.session_state:
@@ -1016,7 +1010,6 @@ def handle_alert_file_upload(files, ranking_model: str):
 def process_alerts_and_respond(entries: list, ranking_model: str):
     """Runs the 3x-repeat ranking pipeline over `entries` and posts the
     formatted result (plus a .txt download) as an assistant chat message."""
-    rules = st.session_state.predefined_rules
     rag_system = st.session_state.rag_system
 
     with st.chat_message("assistant"):
@@ -1038,7 +1031,7 @@ def process_alerts_and_respond(entries: list, ranking_model: str):
                     )
 
                 result = snort_ranking.rank_alert_three_times(
-                    ollama_client, ranking_model, alert_entry, rag_system, rules,
+                    ollama_client, ranking_model, alert_entry, rag_system,
                     repeats=3, progress_cb=_progress,
                 )
                 processed.append(result)
@@ -1250,7 +1243,7 @@ def main():
             **🚨 Snort alert severity ranking**
             * Attach a Snort/Suricata alerts JSON file (📎 in the chat box)
             * Each alert is ranked 1–5 for severity, run 3× to check consistency
-            * Rankings cite the matched rules and NIST/ISO context above
+            * Rankings cite the alert's own rule documentation and NIST/ISO context above
 
             *Ask a question, or attach an alerts file to get started.*
             """)

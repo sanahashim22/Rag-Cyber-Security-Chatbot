@@ -3,3 +3,5 @@ ollama
 numpy
 psutil
 requests
+pandas
+openpyxl
