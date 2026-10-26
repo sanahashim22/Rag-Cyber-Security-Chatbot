@@ -20,6 +20,7 @@ import hashlib
 import html
 import json
 from collections import Counter
+from datetime import datetime
 from io import BytesIO
 from typing import Any, Dict, List
 
@@ -539,7 +540,121 @@ def render_alert_timing_detail(item: Dict) -> None:
             )
 
 
-def render_timing_tab(processed: List[Dict]) -> None:
+def _append_alert_timing_text(lines: List[str], item: Dict) -> None:
+    """Plain-text equivalent of render_alert_timing_detail, for the Timing
+    tab's downloadable report - same data, same stage/attempt breakdown,
+    just as lines instead of Streamlit widgets."""
+    timings = item.get("timings") or {}
+    alert = item["alert_entry"].get("alert", {}) or {}
+    alert_id = item["alert_entry"].get("alert_id", "?")
+    msg = alert.get("alert_message", "(no message)")
+    lines.append(f"Alert {alert_id} - {msg}")
+    lines.append(
+        f"  Alert span: {timings.get('alert_start_ts', '?')} -> "
+        f"{timings.get('alert_end_ts', '?')}  (total {format_duration(timings.get('alert_duration_sec'))})"
+    )
+    retrieval = timings.get("retrieval")
+    if retrieval:
+        lines.append(
+            f"  RAG retrieval: {retrieval['start_ts']} -> {retrieval['end_ts']} "
+            f"({format_duration(retrieval['duration_sec'])}) - shared by all 3 runs below"
+        )
+    for run_idx, stage_list in enumerate(timings.get("runs", []), 1):
+        if not stage_list:
+            continue
+        lines.append(f"  Run {run_idx}:")
+        for s in stage_list:
+            label = STAGE_LABELS.get(s["stage"], s["stage"])
+            lines.append(
+                f"    {label:<32} {s['start_ts']} -> {s['end_ts']}  ({format_duration(s['duration_sec'])})"
+            )
+            attempts = s.get("attempts")
+            if attempts:
+                lines.append(f"      {len(attempts)} attempt(s):")
+                for a in attempts:
+                    round_part = f"round {a['round']}, " if a.get("round") else ""
+                    lines.append(
+                        f"        {round_part}attempt {a['attempt']}: {a['start_ts']} -> {a['end_ts']} "
+                        f"({format_duration(a['duration_sec'])}) - {a['outcome']}"
+                    )
+    lines.append("")
+
+
+def build_timing_report_text(processed: List[Dict], label: str) -> str:
+    """Full plain-text dump of everything shown in the single-model Timing
+    tab - summary metrics, per-stage totals, and the full per-alert/per-run/
+    per-attempt breakdown - for the tab's download button."""
+    alert_durations = [item.get("timings", {}).get("alert_duration_sec", 0.0) for item in processed]
+    total_duration = sum(alert_durations)
+    avg_duration = (total_duration / len(processed)) if processed else 0.0
+    totals = timing_stage_totals(processed)
+
+    lines = [
+        f"Timing Report - {label}",
+        f"Generated: {datetime.now().strftime('%Y-%m-%d %I:%M:%S %p')}",
+        "",
+        "SUMMARY",
+        f"  Total batch time: {format_duration(total_duration)}",
+        f"  Avg time / alert: {format_duration(avg_duration)}",
+        f"  Alerts timed: {len(processed)}",
+        "",
+        "TIME SPENT PER STAGE (summed across all alerts & runs)",
+    ]
+    for s in STAGE_ORDER:
+        if s in totals:
+            lines.append(f"  {STAGE_LABELS[s]:<32} {format_duration(totals[s])}")
+    lines.append("")
+    lines.append("PER-ALERT TIMING DETAIL")
+    lines.append("=" * 70)
+    for item in processed:
+        _append_alert_timing_text(lines, item)
+        lines.append("-" * 70)
+    return "\n".join(lines)
+
+
+def build_comparison_timing_report_text(entries: List[Dict], results: Dict[str, List[Dict]]) -> str:
+    """Full plain-text dump of the 4-model Timing tab - the per-model
+    summary table plus every alert's per-model, per-run, per-attempt
+    breakdown - for that tab's download button."""
+    lines = [
+        "Timing Report - 4-Model Comparison",
+        f"Generated: {datetime.now().strftime('%Y-%m-%d %I:%M:%S %p')}",
+        "",
+        "SUMMARY (all 4 models)",
+    ]
+    for model in RANKING_MODELS:
+        processed = results[model]
+        totals = timing_stage_totals(processed)
+        total_duration = sum(item.get("timings", {}).get("alert_duration_sec", 0.0) for item in processed)
+        avg_duration = (total_duration / len(processed)) if processed else 0.0
+        lines.append(f"  {model}:")
+        lines.append(f"    Total time: {format_duration(total_duration)}")
+        lines.append(f"    Avg time/alert: {format_duration(avg_duration)}")
+        lines.append(f"    RAG retrieval: {format_duration(totals.get('rag_retrieval', 0.0))}")
+        lines.append(f"    Ranking LLM: {format_duration(totals.get('ranking_llm_call', 0.0))}")
+        lines.append(f"    Mismatch LLM: {format_duration(totals.get('mismatch_llm_call', 0.0))}")
+        lines.append(f"    Judge LLM: {format_duration(totals.get('judge_llm_call', 0.0))}")
+    lines.append("")
+    lines.append("PER-ALERT TIMING DETAIL (all 4 models)")
+    lines.append("=" * 70)
+    for idx in range(len(entries)):
+        base_item = results[RANKING_MODELS[0]][idx]
+        alert = base_item["alert_entry"].get("alert", {}) or {}
+        alert_id = base_item["alert_entry"].get("alert_id", "?")
+        msg = alert.get("alert_message", "(no message)")
+        lines.append(f"Alert {alert_id} - {msg}")
+        lines.append("")
+        for model in RANKING_MODELS:
+            lines.append(f"  [{model}]")
+            sub_lines: List[str] = []
+            _append_alert_timing_text(sub_lines, results[model][idx])
+            for sl in sub_lines:
+                lines.append(f"  {sl}" if sl else "")
+        lines.append("-" * 70)
+    return "\n".join(lines)
+
+
+def render_timing_tab(processed: List[Dict], model: str) -> None:
     alert_durations = [item.get("timings", {}).get("alert_duration_sec", 0.0) for item in processed]
     total_duration = sum(alert_durations)
     avg_duration = (total_duration / len(processed)) if processed else 0.0
@@ -575,6 +690,13 @@ def render_timing_tab(processed: List[Dict]) -> None:
         dur = item.get("timings", {}).get("alert_duration_sec")
         with st.expander(f"Alert {alert_id} — {msg}  ⏱️ {format_duration(dur)}", expanded=False):
             render_alert_timing_detail(item)
+
+    st.download_button(
+        "⬇ Download full timing report (.txt)",
+        data=build_timing_report_text(processed, model),
+        file_name=f"timing_report_{model.replace(':', '_')}.txt",
+        mime="text/plain",
+    )
 
 
 def render_comparison_timing_tab(entries: List[Dict], results: Dict[str, List[Dict]]) -> None:
@@ -635,6 +757,13 @@ def render_comparison_timing_tab(entries: List[Dict], results: Dict[str, List[Di
                 with tab:
                     render_alert_timing_detail(results[model][idx])
 
+    st.download_button(
+        "⬇ Download full timing report (.txt)",
+        data=build_comparison_timing_report_text(entries, results),
+        file_name="timing_report_4_model_comparison.txt",
+        mime="text/plain",
+    )
+
 
 def render_single_model_tab(entries: List[Dict], rag_system, fhash: str) -> None:
     col1, col2 = st.columns([3, 1])
@@ -664,7 +793,7 @@ def render_single_model_tab(entries: List[Dict], rag_system, fhash: str) -> None
     with sub_report:
         render_report_tab(processed, model)
     with sub_timing:
-        render_timing_tab(processed)
+        render_timing_tab(processed, model)
 
 
 # ── Tab 2: 4-model side-by-side comparison ──────────────────────────────────
