@@ -289,11 +289,16 @@ def aggregate_stats(processed: List[Dict]) -> Dict:
     }
 
 
-def run_ranking(entries: List[Dict], model: str, rag_system, label_prefix: str = "") -> List[Dict]:
+def run_ranking(entries: List[Dict], model: str, rag_system, label_prefix: str = "",
+                 run_judge: bool = True, run_mismatch: bool = True) -> List[Dict]:
     """Runs rank_alert_three_times over every alert with `model`, showing a
     progress bar. ConvoRAG.search() emits its own st.write() debug lines per
     alert - tucked inside a collapsed expander so they don't clutter the
-    dashboard, same as the old chat interface did."""
+    dashboard, same as the old chat interface did.
+
+    `run_judge` / `run_mismatch`: forwarded to rank_alert_three_times - lets
+    the user skip the judge LLM call and/or mismatch-justification LLM call
+    for every run, to cut down total ranking time when they don't need them."""
     processed = []
     total = len(entries)
     progress_bar = st.progress(0.0)
@@ -308,6 +313,7 @@ def run_ranking(entries: List[Dict], model: str, rag_system, label_prefix: str =
 
             result = snort_ranking.rank_alert_three_times(
                 ollama_client, model, alert_entry, rag_system, repeats=3, progress_cb=_progress,
+                run_judge=run_judge, run_mismatch=run_mismatch,
             )
             processed.append(result)
             progress_bar.progress(i / total)
@@ -340,7 +346,7 @@ def build_alert_table(processed: List[Dict]) -> pd.DataFrame:
 
 # ── Tab 1 sub-views: Ranking / Reasoning / Report & Material ────────────────
 
-def render_ranking_overview(processed: List[Dict], model: str) -> None:
+def render_ranking_overview(processed: List[Dict], model: str, run_judge: bool = True) -> None:
     stats = aggregate_stats(processed)
     c1, c2, c3, c4 = st.columns(4)
     with c1:
@@ -350,7 +356,7 @@ def render_ranking_overview(processed: List[Dict], model: str) -> None:
     with c3:
         metric_card("Avg Judge Score", f'{stats["avg_judge"]:.2f}' if stats["avg_judge"] is not None else "-", "purple")
     with c4:
-        metric_card("Judge Model", snort_ranking.JUDGE_MODEL, "red")
+        metric_card("Judge Model", snort_ranking.JUDGE_MODEL if run_judge else "Skipped", "red")
 
     st.markdown('<div class="section-label">Severity scale</div>', unsafe_allow_html=True)
     severity_legend()
@@ -386,6 +392,13 @@ def render_run_detail(i: int, r: Dict) -> None:
         unsafe_allow_html=True,
     )
     st.write(r.get("model_justification", "") or "_(no justification returned)_")
+    if r.get("mismatch_with_snort") and r.get("mismatch_justification"):
+        expected = r.get("expected_new_rank_range")
+        expected_str = f"{expected[0]}-{expected[1]}" if expected else "?"
+        st.warning(
+            f"⚠️ Disagrees with Snort priority (Snort implies rank {expected_str}): "
+            f"{r.get('mismatch_justification')}"
+        )
     if r.get("judge_reasoning"):
         st.caption(f"\U0001f9d1⚖️ Judge reasoning: {r.get('judge_reasoning')}")
 
@@ -429,13 +442,14 @@ def render_reasoning_tab(processed: List[Dict]) -> None:
                 render_run_detail(i, r)
 
 
-def render_report_tab(processed: List[Dict], model: str) -> None:
+def render_report_tab(processed: List[Dict], model: str, key_prefix: str = "single") -> None:
     report_text = snort_ranking.build_report_markdown(processed, model)
     st.download_button(
         "⬇ Download full report (.md)",
         data=report_text,
         file_name=f"snort_ranking_report_{model.replace(':', '_')}.md",
         mime="text/markdown",
+        key=f"report_dl_{key_prefix}_{model}",
     )
     st.markdown(report_text)
 
@@ -773,10 +787,28 @@ def render_single_model_tab(entries: List[Dict], rag_system, fhash: str) -> None
         st.write("")
         run_clicked = st.button("▶ Run ranking", key="run_single_btn", width='stretch')
 
-    state_key = f"single::{fhash}::{model}"
+    col3, col4 = st.columns(2)
+    with col3:
+        run_judge = st.checkbox(
+            "Judge LLM", value=True, key="single_run_judge",
+            help="Score each run's justification with an independent judge model "
+                 "(gemma2:2b). Adds one extra LLM call per run - uncheck to save time "
+                 "if you don't need the judge score.",
+        )
+    with col4:
+        run_mismatch = st.checkbox(
+            "Mismatch justification", value=True, key="single_run_mismatch",
+            help="When a run's rank disagrees with Snort's own priority, ask the model "
+                 "to justify the disagreement. Only adds a call when a mismatch actually "
+                 "happens - uncheck to skip it and save time.",
+        )
+
+    state_key = f"single::{fhash}::{model}::{run_judge}::{run_mismatch}"
     if run_clicked:
         with st.spinner(f"Ranking {len(entries)} alert(s) with {model} (3 runs each)..."):
-            st.session_state[state_key] = run_ranking(entries, model, rag_system)
+            st.session_state[state_key] = run_ranking(
+                entries, model, rag_system, run_judge=run_judge, run_mismatch=run_mismatch,
+            )
 
     processed = st.session_state.get(state_key)
     if processed is None:
@@ -787,7 +819,7 @@ def render_single_model_tab(entries: List[Dict], rag_system, fhash: str) -> None
         ["\U0001f4cb Ranking", "\U0001f9e0 Reasoning", "\U0001f4c4 Report & Material", "⏱️ Timing"]
     )
     with sub_rank:
-        render_ranking_overview(processed, model)
+        render_ranking_overview(processed, model, run_judge=run_judge)
     with sub_reason:
         render_reasoning_tab(processed)
     with sub_report:
@@ -968,7 +1000,23 @@ def build_comparison_excel(entries: List[Dict], results: Dict[str, List[Dict]]) 
 
 def render_comparison_tab(entries: List[Dict], rag_system, fhash: str) -> None:
     run_clicked = st.button("▶ Run all 4 models", key="run_compare_btn")
-    state_key = f"compare::{fhash}"
+
+    col1, col2 = st.columns(2)
+    with col1:
+        run_judge = st.checkbox(
+            "Judge LLM", value=True, key="compare_run_judge",
+            help="Score each run's justification with an independent judge model "
+                 "(gemma2:2b). Adds one extra LLM call per run, per model - uncheck to "
+                 "save time if you don't need the judge score.",
+        )
+    with col2:
+        run_mismatch = st.checkbox(
+            "Mismatch justification", value=True, key="compare_run_mismatch",
+            help="When a run's rank disagrees with Snort's own priority, ask the model "
+                 "to justify the disagreement. Only adds a call when a mismatch actually "
+                 "happens - uncheck to skip it and save time.",
+        )
+    state_key = f"compare::{fhash}::{run_judge}::{run_mismatch}"
 
     if run_clicked:
         results: Dict[str, List[Dict]] = {}
@@ -976,7 +1024,10 @@ def render_comparison_tab(entries: List[Dict], rag_system, fhash: str) -> None:
         for mi, model in enumerate(RANKING_MODELS, 1):
             overall_status.markdown(f"**Running model {mi}/{len(RANKING_MODELS)}: `{model}`**")
             with st.spinner(f"Ranking {len(entries)} alert(s) with {model} (3 runs each)..."):
-                results[model] = run_ranking(entries, model, rag_system, label_prefix=f"[{model}] ")
+                results[model] = run_ranking(
+                    entries, model, rag_system, label_prefix=f"[{model}] ",
+                    run_judge=run_judge, run_mismatch=run_mismatch,
+                )
         overall_status.empty()
         st.session_state[state_key] = results
 
@@ -989,91 +1040,102 @@ def render_comparison_tab(entries: List[Dict], rag_system, fhash: str) -> None:
         )
         return
 
-    st.markdown('<div class="section-label">Severity scale</div>', unsafe_allow_html=True)
-    severity_legend()
-
-    st.markdown('<div class="section-label">Model summary</div>', unsafe_allow_html=True)
-    summary_rows = []
-    for model in RANKING_MODELS:
-        stats = aggregate_stats(results[model])
-        summary_rows.append(
-            {
-                "Model": model,
-                "Consistency (3/3)": f'{stats["consistent_count"]}/{stats["total_alerts"]}',
-                "Avg Judge Score": f'{stats["avg_judge"]:.3f}' if stats["avg_judge"] is not None else "-",
-                "Rank 1": stats["rank_counts"][0],
-                "Rank 2": stats["rank_counts"][1],
-                "Rank 3": stats["rank_counts"][2],
-                "Rank 4": stats["rank_counts"][3],
-                "Rank 5": stats["rank_counts"][4],
-            }
-        )
-    st.dataframe(pd.DataFrame(summary_rows), width='stretch', hide_index=True)
-    st.caption(
-        "These are pipeline-measured stats only (consistency across 3 runs, independent judge "
-        "score) - there's no external \"correct answer\" baked in, so no model is labeled "
-        "best/worst here."
+    sub_rank, sub_reason, sub_report, sub_timing = st.tabs(
+        ["\U0001f4cb Ranking", "\U0001f9e0 Reasoning", "\U0001f4c4 Report & Material", "⏱️ Timing"]
     )
 
-    st.markdown('<div class="section-label">Per-alert comparison</div>', unsafe_allow_html=True)
-    rows = []
-    rank_cols = [f"{model} — rank" for model in RANKING_MODELS]
-    for idx in range(len(entries)):
-        base_item = results[RANKING_MODELS[0]][idx]
-        alert = base_item["alert_entry"].get("alert", {}) or {}
-        row = {
-            "Alert ID": base_item["alert_entry"].get("alert_id", "?"),
-            "Alert Message": alert.get("alert_message", "(no message)"),
-            "Snort Priority": alert.get("priority", "?"),
-            "SID": alert.get("sid", "?"),
-        }
+    with sub_rank:
+        st.markdown('<div class="section-label">Severity scale</div>', unsafe_allow_html=True)
+        severity_legend()
+
+        st.markdown('<div class="section-label">Model summary</div>', unsafe_allow_html=True)
+        summary_rows = []
         for model in RANKING_MODELS:
-            item = results[model][idx]
-            judge_scores = [r.get("judge_score") for r in item["runs"] if r.get("judge_score") is not None]
-            avg_judge = (sum(judge_scores) / len(judge_scores)) if judge_scores else None
-            rank_col = f"{model} — rank"
-            row[rank_col] = mode_rank(item["ranks"])
-            row[f"{model} — runs"] = ", ".join(str(r) for r in item["ranks"])
-            row[f"{model} — judge"] = f"{avg_judge:.2f}" if avg_judge is not None else "-"
-        rows.append(row)
-    compare_df = pd.DataFrame(rows)
-    st.dataframe(style_majority_rank(compare_df, rank_cols), width='stretch', hide_index=True)
-    st.caption("Each model's colored column is its majority rank across 3 runs; \"runs\" shows the raw 3 values and \"judge\" the average judge score.")
+            stats = aggregate_stats(results[model])
+            summary_rows.append(
+                {
+                    "Model": model,
+                    "Consistency (3/3)": f'{stats["consistent_count"]}/{stats["total_alerts"]}',
+                    "Avg Judge Score": f'{stats["avg_judge"]:.3f}' if stats["avg_judge"] is not None else "-",
+                    "Rank 1": stats["rank_counts"][0],
+                    "Rank 2": stats["rank_counts"][1],
+                    "Rank 3": stats["rank_counts"][2],
+                    "Rank 4": stats["rank_counts"][3],
+                    "Rank 5": stats["rank_counts"][4],
+                }
+            )
+        st.dataframe(pd.DataFrame(summary_rows), width='stretch', hide_index=True)
+        st.caption(
+            "These are pipeline-measured stats only (consistency across 3 runs, independent judge "
+            "score) - there's no external \"correct answer\" baked in, so no model is labeled "
+            "best/worst here."
+        )
 
-    excel_bytes = build_comparison_excel(entries, results)
-    st.download_button(
-        "⬇ Download comparison workbook (.xlsx)",
-        data=excel_bytes,
-        file_name="model_comparison.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+        st.markdown('<div class="section-label">Per-alert comparison</div>', unsafe_allow_html=True)
+        rows = []
+        rank_cols = [f"{model} — rank" for model in RANKING_MODELS]
+        for idx in range(len(entries)):
+            base_item = results[RANKING_MODELS[0]][idx]
+            alert = base_item["alert_entry"].get("alert", {}) or {}
+            row = {
+                "Alert ID": base_item["alert_entry"].get("alert_id", "?"),
+                "Alert Message": alert.get("alert_message", "(no message)"),
+                "Snort Priority": alert.get("priority", "?"),
+                "SID": alert.get("sid", "?"),
+            }
+            for model in RANKING_MODELS:
+                item = results[model][idx]
+                judge_scores = [r.get("judge_score") for r in item["runs"] if r.get("judge_score") is not None]
+                avg_judge = (sum(judge_scores) / len(judge_scores)) if judge_scores else None
+                rank_col = f"{model} — rank"
+                row[rank_col] = mode_rank(item["ranks"])
+                row[f"{model} — runs"] = ", ".join(str(r) for r in item["ranks"])
+                row[f"{model} — judge"] = f"{avg_judge:.2f}" if avg_judge is not None else "-"
+            rows.append(row)
+        compare_df = pd.DataFrame(rows)
+        st.dataframe(style_majority_rank(compare_df, rank_cols), width='stretch', hide_index=True)
+        st.caption("Each model's colored column is its majority rank across 3 runs; \"runs\" shows the raw 3 values and \"judge\" the average judge score.")
 
-    st.markdown('<div class="section-label">Per-alert reasoning (all 3 runs, all 4 models)</div>', unsafe_allow_html=True)
-    st.caption(
-        "Rule documentation and retrieved NIST/ISO context are identical for every model on a given "
-        "alert (sid-exact lookup + a fixed retrieval query), so they're shown once per alert; each "
-        "model's tab below has its own 3 runs with that model's own justification and judge reasoning."
-    )
-    for idx in range(len(entries)):
-        base_item = results[RANKING_MODELS[0]][idx]
-        alert = base_item["alert_entry"].get("alert", {}) or {}
-        alert_id = base_item["alert_entry"].get("alert_id", "?")
-        msg = alert.get("alert_message", "(no message)")
+        excel_bytes = build_comparison_excel(entries, results)
+        st.download_button(
+            "⬇ Download comparison workbook (.xlsx)",
+            data=excel_bytes,
+            file_name="model_comparison.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 
-        with st.expander(f"Alert {alert_id} — {msg}", expanded=False):
-            render_shared_alert_context(base_item["runs"])
+    with sub_reason:
+        st.caption(
+            "Rule documentation and retrieved NIST/ISO context are identical for every model on a given "
+            "alert (sid-exact lookup + a fixed retrieval query), so they're shown once per alert; each "
+            "model's tab below has its own 3 runs with that model's own justification and judge reasoning."
+        )
+        for idx in range(len(entries)):
+            base_item = results[RANKING_MODELS[0]][idx]
+            alert = base_item["alert_entry"].get("alert", {}) or {}
+            alert_id = base_item["alert_entry"].get("alert_id", "?")
+            msg = alert.get("alert_message", "(no message)")
 
-            model_tabs = st.tabs([f"{model}" for model in RANKING_MODELS])
-            for tab, model in zip(model_tabs, RANKING_MODELS):
-                with tab:
-                    item = results[model][idx]
-                    consistency_tag = "consistent" if item["consistent"] else "varied across runs"
-                    st.caption(f"Ranks across 3 runs: {item['ranks']} ({consistency_tag})")
-                    for i, r in enumerate(item["runs"], 1):
-                        render_run_detail(i, r)
+            with st.expander(f"Alert {alert_id} — {msg}", expanded=False):
+                render_shared_alert_context(base_item["runs"])
 
-    st.markdown('<div class="section-label">⏱️ Timing (all 4 models)</div>', unsafe_allow_html=True)
-    render_comparison_timing_tab(entries, results)
+                model_tabs = st.tabs([f"{model}" for model in RANKING_MODELS])
+                for tab, model in zip(model_tabs, RANKING_MODELS):
+                    with tab:
+                        item = results[model][idx]
+                        consistency_tag = "consistent" if item["consistent"] else "varied across runs"
+                        st.caption(f"Ranks across 3 runs: {item['ranks']} ({consistency_tag})")
+                        for i, r in enumerate(item["runs"], 1):
+                            render_run_detail(i, r)
+
+    with sub_report:
+        report_model_tabs = st.tabs([f"{model}" for model in RANKING_MODELS])
+        for tab, model in zip(report_model_tabs, RANKING_MODELS):
+            with tab:
+                render_report_tab(results[model], model, key_prefix="compare")
+
+    with sub_timing:
+        render_comparison_timing_tab(entries, results)
 
 
 # ── Page ─────────────────────────────────────────────────────────────────────

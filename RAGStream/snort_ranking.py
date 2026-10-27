@@ -231,10 +231,9 @@ keys, IN THIS ORDER (write your reasoning out first, THEN commit to a rank \
 based on what you just wrote - do not decide the rank before writing the \
 justification):
 {"justification": "<2-4 sentences citing the document evidence and/or alert \
-data that led to this rank>", "metrics_used": ["<specific fields/evidence \
-you used>"], "reported_sid": <integer - the sid of THIS alert's own Snort \
-rule, from the ALERT DATA>, "severity_rank": <integer 1-5, decided AFTER \
-writing the justification above>}
+data that led to this rank>", "reported_sid": <integer - the sid of THIS \
+alert's own Snort rule, from the ALERT DATA>, "severity_rank": <integer 1-5, \
+decided AFTER writing the justification above>}
 """
 
 JUDGE_SYSTEM_PROMPT = """You are an independent SOC quality-assurance reviewer. \
@@ -438,8 +437,8 @@ def call_ollama_json(ollama_client, model: str, system_prompt: str, user_prompt:
                 # full JSON object - a genuinely truncated response, not a
                 # malformed one, so parse_json_response() correctly fails to
                 # parse it and the fail-safe rank-3 default kicks in. Raised
-                # so a full severity_rank + justification + metrics_used +
-                # reported_sid always has room to complete.
+                # so a full severity_rank + justification + reported_sid
+                # always has room to complete.
                 # num_ctx: Ollama defaults to 2048 tokens of INPUT context if
                 # this isn't set. A rich rule_doc_block (full MITRE/CVE
                 # paragraphs) plus a 4000-char NIST/ISO excerpt can push a
@@ -554,7 +553,9 @@ def judge_justification(ollama_client, payload_record: Dict,
 
 def rank_one_alert(ollama_client, ranking_model: str, alert_entry: Dict,
                     rag_system,
-                    retrieved: Tuple[str, float] | None = None) -> Dict:
+                    retrieved: Tuple[str, float] | None = None,
+                    run_judge: bool = True,
+                    run_mismatch: bool = True) -> Dict:
     """Runs the full single-pass ranking pipeline for one alert: RAG
     retrieval + exact rule-doc lookup + ranking call + mismatch check +
     judge scoring. Returns a result dict (never raises - failures degrade to
@@ -566,7 +567,14 @@ def rank_one_alert(ollama_client, ranking_model: str, alert_entry: Dict,
     SAME alert multiple times (see rank_alert_three_times), it's wasteful to
     re-run the embedding + search call on every repeat - pass the result in
     once instead. If omitted, this falls back to fetching it itself (so
-    direct/standalone calls still work unchanged)."""
+    direct/standalone calls still work unchanged).
+
+    `run_judge` / `run_mismatch`: let the caller skip the judge LLM call
+    and/or the mismatch-justification LLM call entirely (each is a separate
+    model call and a meaningful chunk of total ranking time). The mismatch
+    BOOLEAN itself (whether the rank disagrees with Snort's priority) is
+    always computed either way - it's free, no LLM call involved - only the
+    justification call for it is skipped when `run_mismatch` is False."""
     if retrieved is not None:
         context, relevance_score = retrieved
     elif rag_system is not None:
@@ -602,7 +610,7 @@ def rank_one_alert(ollama_client, ranking_model: str, alert_entry: Dict,
         "Rank this ONE alert 1-5 (1=critical, 5=noise) using the alert data, "
         "its rule documentation, and the retrieved document context below. "
         "Respond with ONLY a JSON object with exactly the keys justification, "
-        "metrics_used, reported_sid, severity_rank, IN THAT ORDER (write the "
+        "reported_sid, severity_rank, IN THAT ORDER (write the "
         "justification first, decide severity_rank last, based on it):\n\n"
         f"ALERT DATA:\n{json.dumps(payload_record, indent=2)}\n\n"
         f"{rule_doc_section}"
@@ -667,7 +675,6 @@ def rank_one_alert(ollama_client, ranking_model: str, alert_entry: Dict,
         return {
             "model_severity_rank": 3,
             "model_justification": "Could not get a valid model response - defaulted to rank 3 (fail-safe).",
-            "model_metrics_used": [],
             "model_defaulted": True,
             "raw_model_output_debug": last_raw_debug,
             "retrieved_context": context,
@@ -688,9 +695,6 @@ def rank_one_alert(ollama_client, ranking_model: str, alert_entry: Dict,
 
     rank = int(parsed["severity_rank"])
     justification = parsed.get("justification", "")
-    metrics = parsed.get("metrics_used") or []
-    if not isinstance(metrics, list):
-        metrics = []
 
     # ground_truth_sid was already resolved above (used for the rule_docs
     # lookup) - reused here for the SID mismatch check.
@@ -708,7 +712,7 @@ def rank_one_alert(ollama_client, ranking_model: str, alert_entry: Dict,
     mismatch_justification = None
     if expected is not None:
         mismatch = not (expected[0] <= rank <= expected[1])
-        if mismatch:
+        if mismatch and run_mismatch:
             mismatch_prompt = (
                 f"Original alert + your ranking:\n{json.dumps(payload_record, indent=2)}\n\n"
                 f"Your severity_rank: {rank}\nSnort priority: {snort_priority} "
@@ -730,18 +734,19 @@ def rank_one_alert(ollama_client, ranking_model: str, alert_entry: Dict,
                 mismatch_justification = f"(mismatch justification call failed: {e})"
             timings.append(_stage_timing("mismatch_llm_call", _t0, _now(), attempts=mismatch_attempts))
 
-    _t0 = _now()
-    judge_attempts: List[Dict] = []
-    judge_score, judge_reasoning = judge_justification(
-        ollama_client, payload_record, context, rank, justification,
-        rule_doc_block=rule_doc_block, attempt_log=judge_attempts,
-    )
-    timings.append(_stage_timing("judge_llm_call", _t0, _now(), attempts=judge_attempts))
+    judge_score, judge_reasoning = None, None
+    if run_judge:
+        _t0 = _now()
+        judge_attempts: List[Dict] = []
+        judge_score, judge_reasoning = judge_justification(
+            ollama_client, payload_record, context, rank, justification,
+            rule_doc_block=rule_doc_block, attempt_log=judge_attempts,
+        )
+        timings.append(_stage_timing("judge_llm_call", _t0, _now(), attempts=judge_attempts))
 
     return {
         "model_severity_rank": rank,
         "model_justification": justification,
-        "model_metrics_used": metrics,
         "model_defaulted": False,
         "retrieved_context": context,
         "rag_relevance_score": relevance_score,
@@ -755,16 +760,21 @@ def rank_one_alert(ollama_client, ranking_model: str, alert_entry: Dict,
         "sid_match": sid_match,
         "judge_score": judge_score,
         "judge_reasoning": judge_reasoning,
-        "judge_model": JUDGE_MODEL,
+        "judge_model": JUDGE_MODEL if run_judge else None,
         "timings": timings,
     }
 
 
 def rank_alert_three_times(ollama_client, ranking_model: str, alert_entry: Dict,
                             rag_system, repeats: int = 3,
-                            progress_cb=None) -> Dict:
+                            progress_cb=None,
+                            run_judge: bool = True,
+                            run_mismatch: bool = True) -> Dict:
     """Runs rank_one_alert `repeats` times for the SAME alert and reports
-    whether the severity_rank was consistent across all runs."""
+    whether the severity_rank was consistent across all runs.
+
+    `run_judge` / `run_mismatch` are forwarded to every rank_one_alert call
+    unchanged - see its docstring."""
     alert_start = _now()
 
     # Retrieve ONCE and reuse for every repeat - the query is built purely
@@ -784,7 +794,8 @@ def rank_alert_three_times(ollama_client, ranking_model: str, alert_entry: Dict,
         if progress_cb:
             progress_cb(i + 1, repeats)
         runs.append(rank_one_alert(ollama_client, ranking_model, alert_entry, rag_system,
-                                    retrieved=retrieved))
+                                    retrieved=retrieved,
+                                    run_judge=run_judge, run_mismatch=run_mismatch))
 
     ranks = [r["model_severity_rank"] for r in runs]
     consistent = len(set(ranks)) == 1
@@ -966,6 +977,14 @@ def build_report_markdown(processed: List[Dict], ranking_model: str) -> str:
         for i, r in enumerate(runs, 1):
             lines.append(f"**Run {i} justification:** {r.get('model_justification', '')}")
             lines.append("")
+            if r.get("mismatch_with_snort") and r.get("mismatch_justification"):
+                expected = r.get("expected_new_rank_range")
+                expected_str = f"{expected[0]}-{expected[1]}" if expected else "?"
+                lines.append(
+                    f"**Run {i} mismatch justification** (disagrees with Snort's priority, which "
+                    f"implies rank {expected_str}): {r.get('mismatch_justification')}"
+                )
+                lines.append("")
             if r.get("model_defaulted") and r.get("raw_model_output_debug"):
                 lines.append(
                     f"**Run {i} raw model output (debug - this is what the model actually "
