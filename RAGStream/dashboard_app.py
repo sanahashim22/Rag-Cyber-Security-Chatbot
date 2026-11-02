@@ -233,6 +233,253 @@ def rule_card(title: str, body: str, accent: str = "blue") -> None:
     )
 
 
+# ── Floating chatbot widget (bottom-left, available on every tab) ──────────
+
+CHATBOT_CSS = """
+<style>
+div.st-key-chatbot_fab button {
+    position: fixed !important; right: 28px; bottom: 28px; z-index: 999999;
+    width: 60px; height: 60px; border-radius: 50% !important; padding: 0 !important;
+    display: flex !important; align-items: center !important; justify-content: center !important;
+    background: linear-gradient(135deg, #58a6ff, #a371f7) !important;
+    border: 1px solid rgba(255,255,255,0.22) !important;
+    box-shadow: 0 10px 28px rgba(88,166,255,0.35) !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+}
+div.st-key-chatbot_fab button:hover {
+    transform: scale(1.07) !important; box-shadow: 0 12px 32px rgba(88,166,255,0.5) !important;
+}
+div.st-key-chatbot_fab button p,
+div.st-key-chatbot_fab button div {
+    font-size: 30px !important; line-height: 1 !important; margin: 0 !important;
+}
+
+div.st-key-chatbot_panel {
+    position: fixed !important; right: 28px; bottom: 100px; z-index: 999998;
+    width: 370px !important; max-width: calc(100vw - 48px) !important;
+    background: linear-gradient(165deg, #141c2c 0%, #0d1117 100%) !important;
+    border: 1px solid #2d3b52 !important;
+    border-radius: 18px !important; box-shadow: 0 24px 60px rgba(0,0,0,0.55) !important;
+    padding: 6px 16px 16px 16px !important;
+}
+div.st-key-chatbot_panel .chatbot-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin: 10px 0 2px 0;
+}
+div.st-key-chatbot_panel .chatbot-title {
+    font-size: 15px; font-weight: 800; color: #f0f6fc;
+    display: flex; align-items: center; gap: 8px;
+}
+div.st-key-chatbot_panel .chatbot-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #2ea043;
+    box-shadow: 0 0 6px #2ea043; display: inline-block;
+}
+div.st-key-chatbot_panel [data-testid="stCaptionContainer"] {
+    background: rgba(88,166,255,0.08); border: 1px solid #27354a;
+    border-radius: 10px; padding: 8px 10px !important; margin-bottom: 8px;
+}
+div.st-key-chatbot_panel [data-testid="stChatMessage"] {
+    background: #161f30 !important; border: 1px solid #27354a !important;
+    border-radius: 12px !important; padding: 6px 10px !important; margin-bottom: 8px !important;
+}
+div.st-key-chatbot_panel [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+    background: linear-gradient(135deg, #1d3a66, #16233a) !important;
+    border: 1px solid #3a5a86 !important;
+}
+div.st-key-chatbot_panel [data-testid="stTextInput"] input {
+    background-color: #0d1117 !important; border: 1px solid #27354a !important;
+    border-radius: 10px !important; color: #f0f6fc !important;
+}
+/* Streamlit's auto "Press Enter to submit form" hint renders cramped/
+   overlapping in this narrow panel - just hide it, the Send button already
+   makes the submit action obvious. */
+div.st-key-chatbot_panel [data-testid="InputInstructions"] { display: none !important; }
+div.st-key-chatbot_panel div.stFormSubmitButton button {
+    background: linear-gradient(135deg, #58a6ff, #a371f7) !important;
+    border: none !important; border-radius: 10px !important; font-weight: 750 !important;
+    color: #ffffff !important;
+}
+div.st-key-chatbot_panel button[kind="secondaryFormSubmit"],
+div.st-key-chatbot_panel [data-testid="stWidgetLabel"] { color: #f0f6fc !important; }
+/* ConvoRAG.rag() wraps its own debug st.write() calls in a collapsed
+   st.expander() - hidden here, just the "Thinking..." spinner shows while
+   it runs instead. */
+div.st-key-chatbot_panel [data-testid="stExpander"] { display: none !important; }
+</style>
+"""
+
+
+def _draw_chatbot(rag_system) -> None:
+    """Actual widget content - called exactly once per script run (see
+    render_chatbot_widget()). Widget disabling while ranking is in progress
+    is handled separately, via a key-free CSS overlay (set_chatbot_busy()),
+    NOT by redrawing this function again with different widget keys in the
+    same run - Streamlit rejects reusing the same widget key twice in one
+    run, even inside a fresh st.empty() placeholder."""
+    st.markdown(CHATBOT_CSS, unsafe_allow_html=True)
+    chat_model = st.session_state.get("single_model_select", RANKING_MODELS[0])
+
+    if not st.session_state.chatbot_open:
+        if st.button("\U0001f916", key="chatbot_fab", help="Ask a cybersecurity question"):
+            st.session_state.chatbot_open = True
+            st.rerun()
+        return
+
+    # While the chat panel is open, dim the rest of the page behind it and
+    # block clicks on it - otherwise the ranking results just sit hidden
+    # under the panel with no visual cue that they're still there, and
+    # nothing stops an accidental click on them from triggering an unrelated
+    # rerun. This is a plain overlay DIV, not a filter/opacity CHANGE on an
+    # existing ancestor - doing the latter would hijack the chat panel's own
+    # position:fixed the same way set_chatbot_busy()'s bug did (see its
+    # docstring). Nothing here touches session_state, so the ranking
+    # results are never actually lost - they're just visually dimmed until
+    # the panel closes again.
+    st.markdown(
+        '<div style="position:fixed; inset:0; z-index:999990; '
+        'background:rgba(0,0,0,0.45);"></div>',
+        unsafe_allow_html=True,
+    )
+
+    with st.container(key="chatbot_panel", border=True):
+        head_col, min_col = st.columns([5, 1])
+        with head_col:
+            st.markdown(
+                '<div class="chatbot-header"><div class="chatbot-title">'
+                '<span class="chatbot-dot"></span>\U0001f916 Security Assistant</div></div>',
+                unsafe_allow_html=True,
+            )
+        with min_col:
+            if st.button("➖", key="chatbot_minimize", help="Minimize"):
+                st.session_state.chatbot_open = False
+                st.rerun()
+
+        if not st.session_state.chatbot_messages:
+            st.caption(
+                "\U0001f4ac We're here to answer your security questions using the "
+                f"NIST CSF 2.0 / ISO 27001 standards. Using **{chat_model}** for responses."
+            )
+        else:
+            st.caption(f"Using **{chat_model}** for responses.")
+
+        with st.container(height=260):
+            for msg in st.session_state.chatbot_messages:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
+
+        with st.form(key="chatbot_form", clear_on_submit=True):
+            user_q = st.text_input(
+                "Ask a question", key="chatbot_input", label_visibility="collapsed",
+                placeholder="Ask about NIST CSF, ISO 27001...",
+            )
+            submitted = st.form_submit_button("Send", width='stretch')
+
+        if submitted and user_q.strip():
+            question = user_q.strip()
+            st.session_state.chatbot_messages.append({"role": "user", "content": question})
+            rag_system.llm_model = chat_model
+            with st.spinner("Thinking..."):
+                try:
+                    stream = rag_system.rag(question)
+                    # Ollama's streaming chunks are pydantic ChatResponse objects,
+                    # not plain dicts - isinstance(chunk, dict) would be False for
+                    # every one of them. They DO support dict-style .get(), same
+                    # as a real dict, so just call it directly on every chunk.
+                    answer = "".join(
+                        (chunk.get("message", {}) or {}).get("content", "") or ""
+                        for chunk in stream
+                    )
+                except Exception as e:
+                    answer = f"Sorry, I hit an error answering that: {e}"
+            rag_system.conversation_history.append((question, answer))
+            st.session_state.chatbot_messages.append({"role": "assistant", "content": answer})
+            st.rerun()
+
+
+def init_chatbot_busy_slot():
+    """Reserves the EMPTY placeholder set_chatbot_busy() uses, early in the
+    script (before st.file_uploader() and the tabs). This does NOT draw the
+    chat widget itself - see render_chatbot_widget() for why that has to
+    happen at the very END of the script instead, and why splitting these
+    two matters."""
+    if "chatbot_open" not in st.session_state:
+        st.session_state.chatbot_open = False
+    if "chatbot_messages" not in st.session_state:
+        st.session_state.chatbot_messages = []
+    return st.empty()
+
+
+def render_chatbot_widget(rag_system) -> None:
+    """Draws the actual floating chat widget (buttons/panel/form) - MUST be
+    called LAST, right before every st.stop() (or at the true end of the
+    script), after every other stateful widget on that code path (including
+    st.file_uploader() and, once the tabs are reached, the model selectbox
+    and judge/mismatch checkboxes inside them) has already run in this SAME
+    pass.
+
+    Why: st.rerun() (used by the chat button/minimize/send handlers below)
+    halts the CURRENT script execution immediately. Streamlit treats a
+    widget whose instantiating call never executed in a given run as a
+    widget that disappeared, and discards its stored value as part of that
+    cleanup. If this widget ran BEFORE some other widget in script order,
+    clicking the chat button/minimize/send would stop the script before
+    that later widget ever got called that pass, silently resetting it to
+    its default and wiping whatever depended on it - first the uploaded
+    file itself (fixed by moving this call after st.file_uploader()), then
+    the ranking model/judge/mismatch choices inside the tabs, which changed
+    the cache key the ranking results are stored under and made them appear
+    to vanish - exactly the bug reported twice: "ranking work removes when I
+    click the chat robot box." Calling this once, last, on every exit path
+    fixes it for good: by the time any button here can call st.rerun(),
+    every widget on that path has already run once in this same pass, so
+    their state survives regardless of this widget stopping the script
+    afterward."""
+    _draw_chatbot(rag_system)
+
+
+def set_chatbot_busy(busy_slot, busy: bool) -> None:
+    """Blocks (or restores) clicks on the chat widget while a ranking run is
+    actively in progress, WITHOUT redrawing it - any new interaction (the
+    chat button included) cancels Streamlit's current script run outright,
+    and ranking results are only saved to session_state once run_ranking()
+    returns, so an accidental click mid-run would silently discard all
+    ranking work done so far. Call this right before and right after a
+    blocking run_ranking() call.
+
+    Implemented as a plain CSS overlay (pointer-events: none), not a
+    redrawn/disabled widget - re-calling a widget function with the same
+    key twice in one script run raises a DuplicateWidgetID error, even
+    inside a fresh st.empty() placeholder, so the widget itself is only
+    ever drawn once per run (see render_chatbot_widget())."""
+    if busy:
+        busy_slot.markdown(
+            """
+            <style>
+            /* pointer-events on the outer wrapper is safe (doesn't affect
+               positioning), but opacity/filter must go on the FAB's actual
+               <button> - that's the element with position:fixed, and
+               putting opacity<1 or any filter on an ANCESTOR of a
+               fixed-position element creates a new containing block for
+               it, silently relocating it away from the viewport corner
+               (a real bug hit while testing this). The panel itself IS the
+               fixed-positioned element (not a child of one), so dimming it
+               directly is fine. */
+            div[class*="st-key-chatbot_fab"] { pointer-events: none !important; }
+            div[class*="st-key-chatbot_fab"] button {
+                opacity: 0.4 !important; filter: grayscale(0.6) !important;
+            }
+            div[class*="st-key-chatbot_panel"] {
+                pointer-events: none !important; opacity: 0.4 !important;
+                filter: grayscale(0.6) !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        busy_slot.empty()
+
+
 def mode_rank(ranks: List[int]) -> int:
     """Majority vote across the 3 runs; ties broken toward the first run's value."""
     counts = Counter(ranks)
@@ -779,7 +1026,7 @@ def render_comparison_timing_tab(entries: List[Dict], results: Dict[str, List[Di
     )
 
 
-def render_single_model_tab(entries: List[Dict], rag_system, fhash: str) -> None:
+def render_single_model_tab(entries: List[Dict], rag_system, fhash: str, chat_slot=None) -> None:
     col1, col2 = st.columns([3, 1])
     with col1:
         model = st.selectbox("Ranking model", RANKING_MODELS, key="single_model_select")
@@ -805,10 +1052,14 @@ def render_single_model_tab(entries: List[Dict], rag_system, fhash: str) -> None
 
     state_key = f"single::{fhash}::{model}::{run_judge}::{run_mismatch}"
     if run_clicked:
+        if chat_slot is not None:
+            set_chatbot_busy(chat_slot, True)
         with st.spinner(f"Ranking {len(entries)} alert(s) with {model} (3 runs each)..."):
             st.session_state[state_key] = run_ranking(
                 entries, model, rag_system, run_judge=run_judge, run_mismatch=run_mismatch,
             )
+        if chat_slot is not None:
+            set_chatbot_busy(chat_slot, False)
 
     processed = st.session_state.get(state_key)
     if processed is None:
@@ -998,7 +1249,7 @@ def build_comparison_excel(entries: List[Dict], results: Dict[str, List[Dict]]) 
     return buf.getvalue()
 
 
-def render_comparison_tab(entries: List[Dict], rag_system, fhash: str) -> None:
+def render_comparison_tab(entries: List[Dict], rag_system, fhash: str, chat_slot=None) -> None:
     run_clicked = st.button("▶ Run all 4 models", key="run_compare_btn")
 
     col1, col2 = st.columns(2)
@@ -1019,6 +1270,8 @@ def render_comparison_tab(entries: List[Dict], rag_system, fhash: str) -> None:
     state_key = f"compare::{fhash}::{run_judge}::{run_mismatch}"
 
     if run_clicked:
+        if chat_slot is not None:
+            set_chatbot_busy(chat_slot, True)
         results: Dict[str, List[Dict]] = {}
         overall_status = st.empty()
         for mi, model in enumerate(RANKING_MODELS, 1):
@@ -1030,6 +1283,8 @@ def render_comparison_tab(entries: List[Dict], rag_system, fhash: str) -> None:
                 )
         overall_status.empty()
         st.session_state[state_key] = results
+        if chat_slot is not None:
+            set_chatbot_busy(chat_slot, False)
 
     results = st.session_state.get(state_key)
     if results is None:
@@ -1165,6 +1420,8 @@ with st.status("Loading NIST/ISO knowledge base...", expanded=False) as kb_statu
     rag_system, doc_names = load_rag_system()
     kb_status.update(label="✅ NIST/ISO knowledge base ready", state="complete", expanded=False)
 
+chat_slot = init_chatbot_busy_slot()
+
 with st.sidebar:
     doc_list_html = "".join(f"<li>{html.escape(name)}</li>" for name in doc_names) or "<li>Built-in NIST CSF 2.0 summary</li>"
     st.markdown(
@@ -1194,10 +1451,21 @@ with st.sidebar:
         st.markdown('<div class="info-card-title">\U0001f3af Severity scale</div>', unsafe_allow_html=True)
         severity_legend()
 
-uploaded_file = st.file_uploader("Upload Snort/Suricata alerts (JSON)", type=["json"])
+uploaded_file = st.file_uploader(
+    "Upload Snort/Suricata alerts (JSON)", type=["json"], key="alerts_file_uploader",
+)
+
+# NOTE: render_chatbot_widget() is intentionally NOT called here anymore.
+# It must run after every other stateful widget that belongs to whichever
+# code path is about to end the script (st.stop() or falling off the end) -
+# see render_chatbot_widget()'s docstring for why. Since different runs
+# st.stop() at different points below (no upload yet, bad JSON, no entries,
+# the AUTO_RUN_LIMIT confirm step, or the full tabs), it's called once right
+# before each of those exit points instead of once up here.
 
 if uploaded_file is None:
     st.info("Upload a JSON alerts file to begin - a single alert object, a list of alerts, or an `{\"alerts\": [...]}` export are all accepted.")
+    render_chatbot_widget(rag_system)
     st.stop()
 
 raw_bytes = uploaded_file.getvalue()
@@ -1207,6 +1475,7 @@ try:
     data = json.loads(raw_bytes.decode("utf-8", errors="ignore"))
 except Exception as e:
     st.error(f"Could not parse `{uploaded_file.name}` as JSON: {e}")
+    render_chatbot_widget(rag_system)
     st.stop()
 
 if not snort_ranking.is_snort_alerts_payload(data):
@@ -1214,11 +1483,13 @@ if not snort_ranking.is_snort_alerts_payload(data):
         f"`{uploaded_file.name}` doesn't look like a Snort alerts file (expected fields like "
         "`sid`, `priority`, or an `alerts` list). Please upload a Snort/Suricata alerts JSON export."
     )
+    render_chatbot_widget(rag_system)
     st.stop()
 
 entries = snort_ranking.extract_alert_entries(data)
 if not entries:
     st.error(f"`{uploaded_file.name}` was recognized as a Snort alerts file but contained no alerts.")
+    render_chatbot_widget(rag_system)
     st.stop()
 
 total_parsed = len(entries)
@@ -1258,6 +1529,7 @@ if total_parsed > AUTO_RUN_LIMIT:
             if process_all:
                 st.session_state[confirm_key] = total_parsed
                 st.rerun()
+        render_chatbot_widget(rag_system)
         st.stop()
 
     entries = entries[:confirmed_n]
@@ -1266,6 +1538,16 @@ if total_parsed > AUTO_RUN_LIMIT:
 
 tab_single, tab_compare = st.tabs(["\U0001f50e Single-Model Ranking", "\U0001f4ca 4-Model Comparison"])
 with tab_single:
-    render_single_model_tab(entries, rag_system, fhash)
+    render_single_model_tab(entries, rag_system, fhash, chat_slot)
 with tab_compare:
-    render_comparison_tab(entries, rag_system, fhash)
+    render_comparison_tab(entries, rag_system, fhash, chat_slot)
+
+# Drawn last of all - after both tabs' own widgets (model selectbox, judge/
+# mismatch checkboxes, Run ranking button) have already been instantiated in
+# this same pass. See render_chatbot_widget()'s docstring: any click inside
+# the chat widget triggers st.rerun(), which halts the script immediately -
+# if that happened before these tab widgets ran, Streamlit would treat them
+# as "not part of this run" and reset them to their defaults, which changes
+# the cache key the ranking results are stored under and makes cached
+# results for a non-default model/judge/mismatch choice vanish from view.
+render_chatbot_widget(rag_system)
