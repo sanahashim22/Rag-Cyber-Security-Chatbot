@@ -22,7 +22,7 @@ import json
 from collections import Counter
 from datetime import datetime
 from io import BytesIO
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import streamlit as st
@@ -55,8 +55,13 @@ STAGE_LABELS = {
     "ranking_llm_call": "Ranking LLM call",
     "mismatch_llm_call": "Mismatch justification LLM call",
     "judge_llm_call": "Judge LLM call",
+    "correlation_llm_call": "Combined/correlated alert check",
+    "repeated_pattern_llm_call": "Repeated-pattern description call",
 }
-STAGE_ORDER = ["rag_retrieval", "rule_doc_lookup", "ranking_llm_call", "mismatch_llm_call", "judge_llm_call"]
+STAGE_ORDER = [
+    "rag_retrieval", "rule_doc_lookup", "ranking_llm_call", "mismatch_llm_call",
+    "judge_llm_call", "correlation_llm_call", "repeated_pattern_llm_call",
+]
 
 st.set_page_config(
     page_title="Snort Alert Severity Dashboard",
@@ -591,9 +596,95 @@ def build_alert_table(processed: List[Dict]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def run_correlation_analysis(entries: List[Dict], processed: List[Dict], model: str,
+                              run_correlation: bool) -> Optional[Dict]:
+    """Wraps snort_ranking.analyze_correlated_alerts() with the "only makes
+    sense for more than one alert" guard in ONE place, so every caller
+    (single-model tab, each of the 4 models in the comparison tab) gets the
+    same behavior instead of repeating the len(entries) > 1 check. Returns
+    None when correlation shouldn't run at all (checkbox off, or only one
+    alert) - render_correlation_section() treats None as "don't show this
+    section", as opposed to an empty groups list, which means "it ran and
+    found nothing", a real answer worth showing."""
+    if not run_correlation or len(entries) <= 1:
+        return None
+    with st.spinner(f"Checking for combined/correlated alert groups with {model}..."):
+        return snort_ranking.analyze_correlated_alerts(ollama_client, model, processed)
+
+
+CORRELATION_KIND_LABELS = {
+    "repeated_verified": "✅ Repeated pattern",
+}
+
+# "Combined Event" is given a large FIXED pixel width (not the "large"
+# keyword, which is still just 400px and gets stretched to fit anyway) so
+# the table's total column width exceeds the visible area and st.dataframe
+# scrolls - the same drag-right-to-read interaction the 4-Model Comparison
+# table already has with its many columns, instead of double-clicking a
+# cell to expand it. 2000px comfortably exceeds the content area on any
+# realistic screen width, so there's always something to scroll through.
+#
+# NOTE on the scrollbar's own visibility: the underlying grid (glide-data-
+# grid, same one the 4-Model Comparison table already uses) only draws its
+# scrollbar indicator after the FIRST real scroll gesture happens on it -
+# confirmed this is a browser security restriction (a script can't fake a
+# "trusted" user input event to pre-draw it) and not something fixable from
+# here, and it affects the 4-Model Comparison table identically, not just
+# this one.
+CORRELATION_TABLE_COLUMN_CONFIG = {
+    "Combined Event": st.column_config.TextColumn(width=2000),
+}
+
+
+def build_correlation_table(groups: List[Dict]) -> pd.DataFrame:
+    rows = []
+    for g in groups:
+        rank = g.get("combined_severity_rank")
+        rows.append(
+            {
+                "Status": CORRELATION_KIND_LABELS.get(g.get("kind"), "✅ Repeated pattern"),
+                "Alert IDs": ", ".join(str(a) for a in g.get("alert_ids", [])),
+                "Combined Rank": rank if rank is not None else "-",
+                "Combined Event": g.get("event_description", ""),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def render_correlation_groups(groups: List[Dict]) -> None:
+    table = build_correlation_table(groups)
+    st.dataframe(
+        style_majority_rank(table, ["Combined Rank"]), width='stretch', hide_index=True,
+        column_config=CORRELATION_TABLE_COLUMN_CONFIG,
+    )
+
+
+def render_correlation_section(correlation: Optional[Dict]) -> None:
+    """Renders the 'Combined / correlated alert groups' table below the
+    per-alert ranking table. Takes None (meaning: correlation didn't run -
+    see run_correlation_analysis()) as "render nothing, not even a caption",
+    so a single-alert run or the checkbox being off leaves no trace of this
+    feature in the UI at all, exactly like the Judge/Mismatch checkboxes
+    already do when unchecked."""
+    if correlation is None:
+        return
+    st.markdown('<div class="section-label">Combined / correlated alert groups</div>', unsafe_allow_html=True)
+    st.caption(
+        "Looks at ALL of this batch's alerts together (not one at a time) for the exact same "
+        "alert type firing more than once - found by an exact match in code, so every group "
+        "shown here is ✅ code-confirmed."
+    )
+    groups = correlation.get("groups") or []
+    if not groups:
+        st.info("No correlated alert groups found in this batch.")
+        return
+    render_correlation_groups(groups)
+
+
 # ── Tab 1 sub-views: Ranking / Reasoning / Report & Material ────────────────
 
-def render_ranking_overview(processed: List[Dict], model: str, run_judge: bool = True) -> None:
+def render_ranking_overview(processed: List[Dict], model: str, run_judge: bool = True,
+                             correlation: Optional[Dict] = None) -> None:
     stats = aggregate_stats(processed)
     c1, c2, c3, c4 = st.columns(4)
     with c1:
@@ -620,6 +711,8 @@ def render_ranking_overview(processed: List[Dict], model: str, run_judge: bool =
     st.markdown('<div class="section-label">Per-alert ranking</div>', unsafe_allow_html=True)
     table = build_alert_table(processed)
     st.dataframe(style_majority_rank(table, ["Majority Rank"]), width='stretch', hide_index=True)
+
+    render_correlation_section(correlation)
 
 
 def render_run_detail(i: int, r: Dict) -> None:
@@ -735,6 +828,71 @@ def timing_stage_totals(processed: List[Dict]) -> Dict[str, float]:
     return totals
 
 
+def correlation_timing_total(correlation: Optional[Dict]) -> float:
+    """Sums the duration_sec of every stage in a correlation result's
+    "timings" list (the once-per-batch combined/correlated alert check,
+    kept separate from timing_stage_totals() since it isn't inside any
+    single alert's "timings") - None/missing degrades to 0.0 so callers can
+    add it into other totals unconditionally."""
+    if not correlation:
+        return 0.0
+    return sum(t.get("duration_sec", 0.0) for t in (correlation.get("timings") or []))
+
+
+def merge_correlation_into_totals(totals: Dict[str, float], correlation: Optional[Dict]) -> Dict[str, float]:
+    """Folds the batch-level correlation timings into a per-stage totals
+    dict (as produced by timing_stage_totals) so the existing STAGE_ORDER-
+    driven chart/table/report code shows them alongside the per-alert
+    stages with no special-casing."""
+    for t in (correlation or {}).get("timings") or []:
+        totals[t["stage"]] = totals.get(t["stage"], 0.0) + t["duration_sec"]
+    return totals
+
+
+def render_correlation_timing_detail(correlation: Optional[Dict]) -> None:
+    """Stage/attempt breakdown for the batch-level correlation check - same
+    stage-dict shape as a per-alert stage (see _stage_timing), just not
+    nested under one alert. Mirrors render_alert_timing_detail's table
+    layout for the per-alert stages."""
+    timings = (correlation or {}).get("timings") or []
+    if not timings:
+        return
+    rows = [
+        {
+            "Stage": STAGE_LABELS.get(s["stage"], s["stage"]),
+            "Start": s["start_ts"],
+            "End": s["end_ts"],
+            "Duration": format_duration(s["duration_sec"]),
+        }
+        for s in timings
+    ]
+    st.dataframe(pd.DataFrame(rows), width='stretch', hide_index=True)
+    for s in timings:
+        attempts = s.get("attempts")
+        if not attempts:
+            continue
+        st.caption(f"↳ {STAGE_LABELS.get(s['stage'], s['stage'])} — {len(attempts)} attempt(s)")
+        attempt_rows = [
+            {
+                "Round": a.get("round", "-"),
+                "Attempt": a["attempt"],
+                "Start": a["start_ts"],
+                "End": a["end_ts"],
+                "Duration": format_duration(a["duration_sec"]),
+                "Model load": format_duration(a["model_load_sec"]) if a.get("model_load_sec") else "-",
+                "Prompt tokens": a.get("prompt_tokens", "-"),
+                "Reading prompt (prefill)": format_duration(a["prompt_eval_sec"]) if a.get("prompt_eval_sec") is not None else "-",
+                "Generating answer (decode)": format_duration(a["response_eval_sec"]) if a.get("response_eval_sec") is not None else "-",
+                "Outcome": a["outcome"],
+            }
+            for a in attempts
+        ]
+        attempt_df = pd.DataFrame(attempt_rows)
+        if all(r["Round"] == "-" for r in attempt_rows):
+            attempt_df = attempt_df.drop(columns=["Round"])
+        st.dataframe(attempt_df, width='stretch', hide_index=True)
+
+
 def render_alert_timing_detail(item: Dict) -> None:
     """Start/end/duration for one alert's retrieval + every run's stages -
     the per-alert drill-down behind the Timing tab's summary numbers."""
@@ -841,14 +999,37 @@ def _append_alert_timing_text(lines: List[str], item: Dict) -> None:
     lines.append("")
 
 
-def build_timing_report_text(processed: List[Dict], label: str) -> str:
+def _append_correlation_timing_text(lines: List[str], correlation: Optional[Dict]) -> None:
+    """Plain-text equivalent of render_correlation_timing_detail, for the
+    Timing tab's downloadable report."""
+    timings = (correlation or {}).get("timings") or []
+    if not timings:
+        return
+    lines.append("COMBINED/CORRELATED ALERT CHECK")
+    for s in timings:
+        label = STAGE_LABELS.get(s["stage"], s["stage"])
+        lines.append(f"  {label:<32} {s['start_ts']} -> {s['end_ts']}  ({format_duration(s['duration_sec'])})")
+        attempts = s.get("attempts")
+        if attempts:
+            lines.append(f"    {len(attempts)} attempt(s):")
+            for a in attempts:
+                round_part = f"round {a['round']}, " if a.get("round") else ""
+                lines.append(
+                    f"      {round_part}attempt {a['attempt']}: {a['start_ts']} -> {a['end_ts']} "
+                    f"({format_duration(a['duration_sec'])}) - {a['outcome']}"
+                )
+    lines.append("")
+
+
+def build_timing_report_text(processed: List[Dict], label: str, correlation: Optional[Dict] = None) -> str:
     """Full plain-text dump of everything shown in the single-model Timing
     tab - summary metrics, per-stage totals, and the full per-alert/per-run/
     per-attempt breakdown - for the tab's download button."""
     alert_durations = [item.get("timings", {}).get("alert_duration_sec", 0.0) for item in processed]
-    total_duration = sum(alert_durations)
-    avg_duration = (total_duration / len(processed)) if processed else 0.0
-    totals = timing_stage_totals(processed)
+    corr_total = correlation_timing_total(correlation)
+    total_duration = sum(alert_durations) + corr_total
+    avg_duration = (sum(alert_durations) / len(processed)) if processed else 0.0
+    totals = merge_correlation_into_totals(timing_stage_totals(processed), correlation)
 
     lines = [
         f"Timing Report - {label}",
@@ -858,6 +1039,7 @@ def build_timing_report_text(processed: List[Dict], label: str) -> str:
         f"  Total batch time: {format_duration(total_duration)}",
         f"  Avg time / alert: {format_duration(avg_duration)}",
         f"  Alerts timed: {len(processed)}",
+        f"  Combined/correlated check: {format_duration(corr_total)}",
         "",
         "TIME SPENT PER STAGE (summed across all alerts & runs)",
     ]
@@ -865,6 +1047,7 @@ def build_timing_report_text(processed: List[Dict], label: str) -> str:
         if s in totals:
             lines.append(f"  {STAGE_LABELS[s]:<32} {format_duration(totals[s])}")
     lines.append("")
+    _append_correlation_timing_text(lines, correlation)
     lines.append("PER-ALERT TIMING DETAIL")
     lines.append("=" * 70)
     for item in processed:
@@ -873,10 +1056,12 @@ def build_timing_report_text(processed: List[Dict], label: str) -> str:
     return "\n".join(lines)
 
 
-def build_comparison_timing_report_text(entries: List[Dict], results: Dict[str, List[Dict]]) -> str:
+def build_comparison_timing_report_text(entries: List[Dict], results: Dict[str, List[Dict]],
+                                         correlations: Optional[Dict[str, Optional[Dict]]] = None) -> str:
     """Full plain-text dump of the 4-model Timing tab - the per-model
     summary table plus every alert's per-model, per-run, per-attempt
     breakdown - for that tab's download button."""
+    correlations = correlations or {}
     lines = [
         "Timing Report - 4-Model Comparison",
         f"Generated: {datetime.now().strftime('%Y-%m-%d %I:%M:%S %p')}",
@@ -885,8 +1070,10 @@ def build_comparison_timing_report_text(entries: List[Dict], results: Dict[str, 
     ]
     for model in RANKING_MODELS:
         processed = results[model]
-        totals = timing_stage_totals(processed)
-        total_duration = sum(item.get("timings", {}).get("alert_duration_sec", 0.0) for item in processed)
+        correlation = correlations.get(model)
+        corr_total = correlation_timing_total(correlation)
+        totals = merge_correlation_into_totals(timing_stage_totals(processed), correlation)
+        total_duration = sum(item.get("timings", {}).get("alert_duration_sec", 0.0) for item in processed) + corr_total
         avg_duration = (total_duration / len(processed)) if processed else 0.0
         lines.append(f"  {model}:")
         lines.append(f"    Total time: {format_duration(total_duration)}")
@@ -895,6 +1082,7 @@ def build_comparison_timing_report_text(entries: List[Dict], results: Dict[str, 
         lines.append(f"    Ranking LLM: {format_duration(totals.get('ranking_llm_call', 0.0))}")
         lines.append(f"    Mismatch LLM: {format_duration(totals.get('mismatch_llm_call', 0.0))}")
         lines.append(f"    Judge LLM: {format_duration(totals.get('judge_llm_call', 0.0))}")
+        lines.append(f"    Combined/correlated check: {format_duration(corr_total)}")
     lines.append("")
     lines.append("PER-ALERT TIMING DETAIL (all 4 models)")
     lines.append("=" * 70)
@@ -912,22 +1100,39 @@ def build_comparison_timing_report_text(entries: List[Dict], results: Dict[str, 
             for sl in sub_lines:
                 lines.append(f"  {sl}" if sl else "")
         lines.append("-" * 70)
+    lines.append("")
+    lines.append("COMBINED/CORRELATED ALERT CHECK (per model)")
+    lines.append("=" * 70)
+    for model in RANKING_MODELS:
+        sub_lines: List[str] = []
+        _append_correlation_timing_text(sub_lines, correlations.get(model))
+        if sub_lines:
+            lines.append(f"  [{model}]")
+            for sl in sub_lines:
+                lines.append(f"  {sl}" if sl else "")
     return "\n".join(lines)
 
 
-def render_timing_tab(processed: List[Dict], model: str) -> None:
+def render_timing_tab(processed: List[Dict], model: str, correlation: Optional[Dict] = None) -> None:
     alert_durations = [item.get("timings", {}).get("alert_duration_sec", 0.0) for item in processed]
-    total_duration = sum(alert_durations)
-    avg_duration = (total_duration / len(processed)) if processed else 0.0
-    totals = timing_stage_totals(processed)
+    corr_total = correlation_timing_total(correlation)
+    total_duration = sum(alert_durations) + corr_total
+    avg_duration = (sum(alert_durations) / len(processed)) if processed else 0.0
+    totals = merge_correlation_into_totals(timing_stage_totals(processed), correlation)
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
         metric_card("Total batch time", format_duration(total_duration), "blue")
     with c2:
         metric_card("Avg time / alert", format_duration(avg_duration), "purple")
     with c3:
         metric_card("Alerts timed", len(processed), "green")
+    with c4:
+        metric_card(
+            "Combined/correlated check",
+            format_duration(corr_total) if correlation is not None else "Skipped",
+            "red",
+        )
 
     st.markdown('<div class="section-label">Time spent per stage (summed across all alerts & runs)</div>', unsafe_allow_html=True)
     stage_names = [STAGE_LABELS[s] for s in STAGE_ORDER if s in totals]
@@ -943,6 +1148,11 @@ def render_timing_tab(processed: List[Dict], model: str) -> None:
         "outside Snort's expected range, so that bar can be 0 or small depending on the alert mix."
     )
 
+    if correlation is not None and correlation.get("timings"):
+        st.markdown('<div class="section-label">Combined/correlated alert check timing</div>', unsafe_allow_html=True)
+        with st.expander(f"Combined/correlated alert check  ⏱️ {format_duration(corr_total)}", expanded=False):
+            render_correlation_timing_detail(correlation)
+
     st.markdown('<div class="section-label">Per-alert timing detail</div>', unsafe_allow_html=True)
     for item in processed:
         alert = item["alert_entry"].get("alert", {}) or {}
@@ -954,18 +1164,22 @@ def render_timing_tab(processed: List[Dict], model: str) -> None:
 
     st.download_button(
         "⬇ Download full timing report (.txt)",
-        data=build_timing_report_text(processed, model),
+        data=build_timing_report_text(processed, model, correlation=correlation),
         file_name=f"timing_report_{model.replace(':', '_')}.txt",
         mime="text/plain",
     )
 
 
-def render_comparison_timing_tab(entries: List[Dict], results: Dict[str, List[Dict]]) -> None:
+def render_comparison_timing_tab(entries: List[Dict], results: Dict[str, List[Dict]],
+                                  correlations: Optional[Dict[str, Optional[Dict]]] = None) -> None:
+    correlations = correlations or {}
     summary_rows = []
     for model in RANKING_MODELS:
         processed = results[model]
-        totals = timing_stage_totals(processed)
-        total_duration = sum(item.get("timings", {}).get("alert_duration_sec", 0.0) for item in processed)
+        correlation = correlations.get(model)
+        corr_total = correlation_timing_total(correlation)
+        totals = merge_correlation_into_totals(timing_stage_totals(processed), correlation)
+        total_duration = sum(item.get("timings", {}).get("alert_duration_sec", 0.0) for item in processed) + corr_total
         avg_duration = (total_duration / len(processed)) if processed else 0.0
         summary_rows.append(
             {
@@ -976,6 +1190,7 @@ def render_comparison_timing_tab(entries: List[Dict], results: Dict[str, List[Di
                 "ranking": totals.get("ranking_llm_call", 0.0),
                 "mismatch": totals.get("mismatch_llm_call", 0.0),
                 "judge": totals.get("judge_llm_call", 0.0),
+                "correlation": corr_total,
             }
         )
     raw_df = pd.DataFrame(summary_rows)
@@ -990,20 +1205,29 @@ def render_comparison_timing_tab(entries: List[Dict], results: Dict[str, List[Di
             "Ranking LLM": raw_df["ranking"].apply(format_duration),
             "Mismatch LLM": raw_df["mismatch"].apply(format_duration),
             "Judge LLM": raw_df["judge"].apply(format_duration),
+            "Combined/correlated check": raw_df["correlation"].apply(format_duration),
         }
     )
     st.dataframe(display_df, width='stretch', hide_index=True)
 
-    chart_df = raw_df.set_index("Model")[["retrieval", "ranking", "mismatch", "judge"]].rename(
+    chart_df = raw_df.set_index("Model")[["retrieval", "ranking", "mismatch", "judge", "correlation"]].rename(
         columns={
             "retrieval": "RAG retrieval",
             "ranking": "Ranking LLM",
             "mismatch": "Mismatch LLM",
             "judge": "Judge LLM",
+            "correlation": "Combined/correlated check",
         }
     )
     st.bar_chart(chart_df, horizontal=True)
     st.caption("Stacked by stage per model - the longest bar is whichever model/stage combo is the current bottleneck.")
+
+    if any(correlations.get(model) is not None and correlations[model].get("timings") for model in RANKING_MODELS):
+        st.markdown('<div class="section-label">Combined/correlated alert check timing (per model)</div>', unsafe_allow_html=True)
+        corr_timing_tabs = st.tabs([f"{model}" for model in RANKING_MODELS])
+        for tab, model in zip(corr_timing_tabs, RANKING_MODELS):
+            with tab:
+                render_correlation_timing_detail(correlations.get(model))
 
     st.markdown('<div class="section-label">Per-alert timing detail (all 4 models)</div>', unsafe_allow_html=True)
     for idx in range(len(entries)):
@@ -1020,7 +1244,7 @@ def render_comparison_timing_tab(entries: List[Dict], results: Dict[str, List[Di
 
     st.download_button(
         "⬇ Download full timing report (.txt)",
-        data=build_comparison_timing_report_text(entries, results),
+        data=build_comparison_timing_report_text(entries, results, correlations=correlations),
         file_name="timing_report_4_model_comparison.txt",
         mime="text/plain",
     )
@@ -1034,7 +1258,7 @@ def render_single_model_tab(entries: List[Dict], rag_system, fhash: str, chat_sl
         st.write("")
         run_clicked = st.button("▶ Run ranking", key="run_single_btn", width='stretch')
 
-    col3, col4 = st.columns(2)
+    col3, col4, col5 = st.columns(3)
     with col3:
         run_judge = st.checkbox(
             "Judge LLM", value=True, key="single_run_judge",
@@ -1049,15 +1273,27 @@ def render_single_model_tab(entries: List[Dict], rag_system, fhash: str, chat_sl
                  "to justify the disagreement. Only adds a call when a mismatch actually "
                  "happens - uncheck to skip it and save time.",
         )
+    with col5:
+        run_correlation = st.checkbox(
+            "Combined/correlated analysis", value=True, key="single_run_correlation",
+            help="One extra call (after all alerts are independently ranked) that looks at "
+                 "the whole batch together and flags alerts that, combined, describe a more "
+                 "dangerous event than any one of them suggests alone. Only runs - and only "
+                 "shows a table - when more than one alert is being ranked.",
+        )
 
-    state_key = f"single::{fhash}::{model}::{run_judge}::{run_mismatch}"
+    state_key = f"single::{fhash}::{model}::{run_judge}::{run_mismatch}::{run_correlation}"
     if run_clicked:
         if chat_slot is not None:
             set_chatbot_busy(chat_slot, True)
         with st.spinner(f"Ranking {len(entries)} alert(s) with {model} (3 runs each)..."):
-            st.session_state[state_key] = run_ranking(
+            processed = run_ranking(
                 entries, model, rag_system, run_judge=run_judge, run_mismatch=run_mismatch,
             )
+        st.session_state[state_key] = processed
+        st.session_state[f"{state_key}::correlation"] = run_correlation_analysis(
+            entries, processed, model, run_correlation,
+        )
         if chat_slot is not None:
             set_chatbot_busy(chat_slot, False)
 
@@ -1065,18 +1301,19 @@ def render_single_model_tab(entries: List[Dict], rag_system, fhash: str, chat_sl
     if processed is None:
         st.info("Select a model and click **Run ranking** to rank these alerts.")
         return
+    correlation = st.session_state.get(f"{state_key}::correlation")
 
     sub_rank, sub_reason, sub_report, sub_timing = st.tabs(
         ["\U0001f4cb Ranking", "\U0001f9e0 Reasoning", "\U0001f4c4 Report & Material", "⏱️ Timing"]
     )
     with sub_rank:
-        render_ranking_overview(processed, model, run_judge=run_judge)
+        render_ranking_overview(processed, model, run_judge=run_judge, correlation=correlation)
     with sub_reason:
         render_reasoning_tab(processed)
     with sub_report:
         render_report_tab(processed, model)
     with sub_timing:
-        render_timing_tab(processed, model)
+        render_timing_tab(processed, model, correlation=correlation)
 
 
 # ── Tab 2: 4-model side-by-side comparison ──────────────────────────────────
@@ -1252,7 +1489,7 @@ def build_comparison_excel(entries: List[Dict], results: Dict[str, List[Dict]]) 
 def render_comparison_tab(entries: List[Dict], rag_system, fhash: str, chat_slot=None) -> None:
     run_clicked = st.button("▶ Run all 4 models", key="run_compare_btn")
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         run_judge = st.checkbox(
             "Judge LLM", value=True, key="compare_run_judge",
@@ -1267,12 +1504,21 @@ def render_comparison_tab(entries: List[Dict], rag_system, fhash: str, chat_slot
                  "to justify the disagreement. Only adds a call when a mismatch actually "
                  "happens - uncheck to skip it and save time.",
         )
-    state_key = f"compare::{fhash}::{run_judge}::{run_mismatch}"
+    with col3:
+        run_correlation = st.checkbox(
+            "Combined/correlated analysis", value=True, key="compare_run_correlation",
+            help="One extra call per model (after all alerts are independently ranked) that "
+                 "looks at the whole batch together and flags alerts that, combined, describe "
+                 "a more dangerous event than any one of them suggests alone. Only runs - and "
+                 "only shows a table - when more than one alert is being ranked.",
+        )
+    state_key = f"compare::{fhash}::{run_judge}::{run_mismatch}::{run_correlation}"
 
     if run_clicked:
         if chat_slot is not None:
             set_chatbot_busy(chat_slot, True)
         results: Dict[str, List[Dict]] = {}
+        correlations: Dict[str, Optional[Dict]] = {}
         overall_status = st.empty()
         for mi, model in enumerate(RANKING_MODELS, 1):
             overall_status.markdown(f"**Running model {mi}/{len(RANKING_MODELS)}: `{model}`**")
@@ -1281,8 +1527,12 @@ def render_comparison_tab(entries: List[Dict], rag_system, fhash: str, chat_slot
                     entries, model, rag_system, label_prefix=f"[{model}] ",
                     run_judge=run_judge, run_mismatch=run_mismatch,
                 )
+            correlations[model] = run_correlation_analysis(
+                entries, results[model], model, run_correlation,
+            )
         overall_status.empty()
         st.session_state[state_key] = results
+        st.session_state[f"{state_key}::correlation"] = correlations
         if chat_slot is not None:
             set_chatbot_busy(chat_slot, False)
 
@@ -1294,6 +1544,7 @@ def render_comparison_tab(entries: List[Dict], rag_system, fhash: str, chat_slot
             "per alert, so it takes roughly 4x longer than the single-model tab."
         )
         return
+    correlations = st.session_state.get(f"{state_key}::correlation") or {}
 
     sub_rank, sub_reason, sub_report, sub_timing = st.tabs(
         ["\U0001f4cb Ranking", "\U0001f9e0 Reasoning", "\U0001f4c4 Report & Material", "⏱️ Timing"]
@@ -1359,6 +1610,24 @@ def render_comparison_tab(entries: List[Dict], rag_system, fhash: str, chat_slot
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
+        if any(correlations.get(model) is not None for model in RANKING_MODELS):
+            st.markdown('<div class="section-label">Combined / correlated alert groups (per model)</div>', unsafe_allow_html=True)
+            st.caption(
+                "Each model gets its own extra pass looking at the whole batch together for the "
+                "exact same alert type firing more than once - shown separately per model rather "
+                "than merged into one table, since the combined-rank judgment can still differ "
+                "between models even though the grouping itself is ✅ code-verified."
+            )
+            corr_model_tabs = st.tabs([f"{model}" for model in RANKING_MODELS])
+            for tab, model in zip(corr_model_tabs, RANKING_MODELS):
+                with tab:
+                    correlation = correlations.get(model)
+                    groups = (correlation or {}).get("groups") or []
+                    if not groups:
+                        st.info("No correlated alert groups found in this batch.")
+                    else:
+                        render_correlation_groups(groups)
+
     with sub_reason:
         st.caption(
             "Rule documentation and retrieved NIST/ISO context are identical for every model on a given "
@@ -1390,7 +1659,7 @@ def render_comparison_tab(entries: List[Dict], rag_system, fhash: str, chat_slot
                 render_report_tab(results[model], model, key_prefix="compare")
 
     with sub_timing:
-        render_comparison_timing_tab(entries, results)
+        render_comparison_timing_tab(entries, results, correlations=correlations)
 
 
 # ── Page ─────────────────────────────────────────────────────────────────────
