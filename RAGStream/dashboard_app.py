@@ -56,11 +56,11 @@ STAGE_LABELS = {
     "mismatch_llm_call": "Mismatch justification LLM call",
     "judge_llm_call": "Judge LLM call",
     "correlation_llm_call": "Combined/correlated alert check",
-    "repeated_pattern_llm_call": "Repeated-pattern description call",
+    "correlation_verify_llm_call": "Combined-event self-check (per group)",
 }
 STAGE_ORDER = [
     "rag_retrieval", "rule_doc_lookup", "ranking_llm_call", "mismatch_llm_call",
-    "judge_llm_call", "correlation_llm_call", "repeated_pattern_llm_call",
+    "judge_llm_call", "correlation_llm_call", "correlation_verify_llm_call",
 ]
 
 st.set_page_config(
@@ -613,27 +613,20 @@ def run_correlation_analysis(entries: List[Dict], processed: List[Dict], model: 
 
 
 CORRELATION_KIND_LABELS = {
-    "repeated_verified": "✅ Repeated pattern",
+    "ai_suggested": "🔗 AI-suggested",
 }
 
-# "Combined Event" is given a large FIXED pixel width (not the "large"
-# keyword, which is still just 400px and gets stretched to fit anyway) so
-# the table's total column width exceeds the visible area and st.dataframe
-# scrolls - the same drag-right-to-read interaction the 4-Model Comparison
-# table already has with its many columns, instead of double-clicking a
-# cell to expand it. 2000px comfortably exceeds the content area on any
-# realistic screen width, so there's always something to scroll through.
-#
-# NOTE on the scrollbar's own visibility: the underlying grid (glide-data-
-# grid, same one the 4-Model Comparison table already uses) only draws its
-# scrollbar indicator after the FIRST real scroll gesture happens on it -
-# confirmed this is a browser security restriction (a script can't fake a
-# "trusted" user input event to pre-draw it) and not something fixable from
-# here, and it affects the 4-Model Comparison table identically, not just
-# this one.
 CORRELATION_TABLE_COLUMN_CONFIG = {
-    "Combined Event": st.column_config.TextColumn(width=2000),
+    "Combined Event": st.column_config.TextColumn(width=600),
 }
+
+# A tall fixed row height so glide-data-grid (the same grid the 4-Model
+# Comparison table uses) WRAPS "Combined Event" text across multiple lines
+# within the cell instead of truncating it at one line (its default
+# row_height only fits a single line) - this Streamlit version (1.59.2)
+# supports row_height precisely for this case, so the full description is
+# visible directly in the table without scrolling or clicking into the cell.
+CORRELATION_TABLE_ROW_HEIGHT = 120
 
 
 def build_correlation_table(groups: List[Dict]) -> pd.DataFrame:
@@ -642,9 +635,9 @@ def build_correlation_table(groups: List[Dict]) -> pd.DataFrame:
         rank = g.get("combined_severity_rank")
         rows.append(
             {
-                "Status": CORRELATION_KIND_LABELS.get(g.get("kind"), "✅ Repeated pattern"),
+                "Status": CORRELATION_KIND_LABELS.get(g.get("kind"), "🔗 AI-suggested"),
                 "Alert IDs": ", ".join(str(a) for a in g.get("alert_ids", [])),
-                "Combined Rank": rank if rank is not None else "-",
+                "Combined Rank": str(rank) if rank is not None else "-",
                 "Combined Event": g.get("event_description", ""),
             }
         )
@@ -655,7 +648,7 @@ def render_correlation_groups(groups: List[Dict]) -> None:
     table = build_correlation_table(groups)
     st.dataframe(
         style_majority_rank(table, ["Combined Rank"]), width='stretch', hide_index=True,
-        column_config=CORRELATION_TABLE_COLUMN_CONFIG,
+        column_config=CORRELATION_TABLE_COLUMN_CONFIG, row_height=CORRELATION_TABLE_ROW_HEIGHT,
     )
 
 
@@ -670,9 +663,11 @@ def render_correlation_section(correlation: Optional[Dict]) -> None:
         return
     st.markdown('<div class="section-label">Combined / correlated alert groups</div>', unsafe_allow_html=True)
     st.caption(
-        "Looks at ALL of this batch's alerts together (not one at a time) for the exact same "
-        "alert type firing more than once - found by an exact match in code, so every group "
-        "shown here is ✅ code-confirmed."
+        "Looks at ALL of this batch's alerts together (not one at a time) and lets the model "
+        "suggest groups of alert_ids that collectively tell a more dangerous story than any one "
+        "alert alone - e.g. alerts 4, 5, 6 together look like a sustained or escalating sequence "
+        "worth reviewing as one event. This is entirely a 🔗 AI-suggested judgment call based on "
+        "the alerts' own content, not a code-guaranteed match."
     )
     groups = correlation.get("groups") or []
     if not groups:
@@ -880,7 +875,7 @@ def render_correlation_timing_detail(correlation: Optional[Dict]) -> None:
                 "End": a["end_ts"],
                 "Duration": format_duration(a["duration_sec"]),
                 "Model load": format_duration(a["model_load_sec"]) if a.get("model_load_sec") else "-",
-                "Prompt tokens": a.get("prompt_tokens", "-"),
+                "Prompt tokens": str(a["prompt_tokens"]) if a.get("prompt_tokens") is not None else "-",
                 "Reading prompt (prefill)": format_duration(a["prompt_eval_sec"]) if a.get("prompt_eval_sec") is not None else "-",
                 "Generating answer (decode)": format_duration(a["response_eval_sec"]) if a.get("response_eval_sec") is not None else "-",
                 "Outcome": a["outcome"],
@@ -940,7 +935,7 @@ def render_alert_timing_detail(item: Dict) -> None:
                     "End": a["end_ts"],
                     "Duration": format_duration(a["duration_sec"]),
                     "Model load": format_duration(a["model_load_sec"]) if a.get("model_load_sec") else "-",
-                    "Prompt tokens": a.get("prompt_tokens", "-"),
+                    "Prompt tokens": str(a["prompt_tokens"]) if a.get("prompt_tokens") is not None else "-",
                     "Reading prompt (prefill)": format_duration(a["prompt_eval_sec"]) if a.get("prompt_eval_sec") is not None else "-",
                     "Generating answer (decode)": format_duration(a["response_eval_sec"]) if a.get("response_eval_sec") is not None else "-",
                     "Outcome": a["outcome"],
@@ -1613,10 +1608,10 @@ def render_comparison_tab(entries: List[Dict], rag_system, fhash: str, chat_slot
         if any(correlations.get(model) is not None for model in RANKING_MODELS):
             st.markdown('<div class="section-label">Combined / correlated alert groups (per model)</div>', unsafe_allow_html=True)
             st.caption(
-                "Each model gets its own extra pass looking at the whole batch together for the "
-                "exact same alert type firing more than once - shown separately per model rather "
-                "than merged into one table, since the combined-rank judgment can still differ "
-                "between models even though the grouping itself is ✅ code-verified."
+                "Each model gets its own extra pass looking at the whole batch together and "
+                "suggesting alert_id groups that collectively look more dangerous than any single "
+                "alert alone - entirely a 🔗 AI-suggested judgment call, shown separately per model "
+                "since both the grouping and the combined rank can differ between models."
             )
             corr_model_tabs = st.tabs([f"{model}" for model in RANKING_MODELS])
             for tab, model in zip(corr_model_tabs, RANKING_MODELS):

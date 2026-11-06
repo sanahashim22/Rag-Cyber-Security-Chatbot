@@ -298,6 +298,15 @@ because nothing about a mobile user-agent plausibly leads to or explains the oth
 Timing and shared IP/port are only ever a SUPPORTING detail for a grouping that content \
 relevance already justifies - never the reason for a grouping by themselves.
 
+SEQUENCE REQUIREMENT - read carefully: the alerts below are listed in CHRONOLOGICAL order and \
+each one carries a sequence_position number (1 = earliest). A valid group's members must stay \
+CLOSE TOGETHER in this order - at most ONE unrelated alert in between two consecutive members is \
+fine (e.g. positions 2, 3, 5 is OK, one unrelated alert sits at position 4), but do NOT reach \
+far across the batch to link alerts separated by two or more unrelated alerts in between (e.g. \
+position 2 and position 40 in a 40-alert batch, or even position 2 and position 6, is NOT a \
+sequence, no matter how similar they look) - a real sequence happens within a short span of \
+time/activity, not scattered across the whole shift.
+
 There are two genuinely valid kinds of grouping:
   1. The SAME alert type (same alert_message / same rule) firing more than once, especially \
 consecutively or repeatedly - e.g. several "OS-MOBILE Android User-Agent detected" alerts in a \
@@ -334,6 +343,32 @@ should simply not appear in any group; it is NOT an error to return no groups at
 nothing in this batch is actually related. Returning no groups at all is the CORRECT answer \
 far more often than finding one - most alerts in a real batch are unrelated noise.
 
+DO NOT SWALLOW MOST OF THE BATCH INTO ONE GROUP just because many alerts happened in the same \
+rough window - a genuine sequence is a tight run of specific, causally-connected actions, not \
+"everything that happened around the same time". There is no fixed size limit on a group (a real \
+sequence can be long if every member genuinely belongs), but every single member must individually \
+pass the relevance test above - if you find yourself including an alert only because it's nearby, \
+not because its own content connects to the rest, take it back out, or report no group at all. For \
+example, several "OS-MOBILE ... User-Agent detected" alerts sitting near a directory-traversal \
+attack in time do NOT belong in that attack's group - passive User-Agent metadata is never part \
+of an exploit \
+sequence, no matter how close in time it occurred.
+
+MULTIPLE SEPARATE GROUPS ARE EXPECTED, not unusual: a batch can easily contain more than one \
+distinct real pattern at once - e.g. one repeated/escalating attack against ONE specific target \
+host, and a SEPARATE repeated pattern against a DIFFERENT target host, elsewhere in the same \
+batch. When that happens, report them as separate entries in "groups" (each with its own \
+alert_ids, event_description, and combined_severity_rank) rather than merging everything into one \
+broad group just because they're all in the same batch. Only combine alerts aimed at different \
+targets into a SINGLE group when there's a genuine content-based reason they're part of the SAME \
+overarching story (e.g. reconnaissance against host A plausibly leading to and explaining a later \
+exploit attempt against host B) - never merely because they share a source IP, occurred in the \
+same batch, or are both "concerning". Both shapes are valid outcomes depending on what the \
+content actually supports: several tight, separately-ranked groups; one broader group when a real \
+cross-target story connects them; or no group at all. When unsure whether to report one broad \
+group or several tighter ones, prefer several tighter ones - precision beats one sprawling \
+narrative that quietly includes alerts that don't really belong.
+
 For EACH group you find, decide:
   - combined_severity_rank: 1-5 on the SAME scale as the independent ranks (1=critical, \
 5=noise), reflecting how severe the COMBINED event is - this can be more severe than any one \
@@ -342,31 +377,43 @@ alert's own independent rank, since the combination is the whole point.
 happened across these alerts together - what action occurred, in what order, and why that \
 specific combination is concerning.
 
+Your combined_severity_rank MUST be consistent with your own event_description - decide the \
+rank based on the same reasoning you just wrote, never separately from it. If your description \
+says this looks like a sustained attack, brute-force attempt, or escalating sequence, the rank \
+must reflect that (low number); if your description says this looks like routine/coincidental \
+activity, the rank must reflect that (high number). A rank that contradicts your own \
+description is wrong.
+
 Respond with ONLY a JSON object, nothing else: {"groups": [{"alert_ids": [<the alert_id \
 values exactly as given in the input, at least 2 per group>], "event_description": "<text>", \
 "combined_severity_rank": <integer 1-5>}, ...]}. If nothing in this batch looks related, \
 respond with {"groups": []}.
 """
 
-REPEATED_PATTERN_SYSTEM_PROMPT = """You are a SOC analyst looking at several Snort/Suricata \
-alerts that are confirmed to be the EXACT SAME alert type/rule, firing more than once in the \
-same batch of alerts. You are NOT deciding whether they're related - that part is already \
-established (they are, by exact match, literally the same rule) - your only job is to assess \
-whether the PATTERN of repetition itself is a concern.
+CORRELATION_VERIFY_SYSTEM_PROMPT = """You are a second, more skeptical SOC analyst performing a quality check on a \
+colleague's work. Your colleague just proposed that a specific set of alerts, taken together, form ONE combined/\
+correlated security event. Your ONLY job is to critically re-examine that specific proposed group and decide \
+whether every member actually belongs - you are not looking for new groups, and you are not re-ranking any alert \
+on its own.
 
-Repeated firing of the same rule can mean several different things: a sustained or persistent \
-attempt (repeated brute-force attempts, repeated scanning of the same target), a misconfigured \
-or simply chatty device generating routine noise, or an escalating policy violation. Use the \
-occurrences' own data (timestamps, source/destination IPs, each occurrence's own independent \
-severity rank) and your general security knowledge to judge which of these is more likely here, \
-and how severe the PATTERN as a whole is - this can be more OR less severe than any single \
-occurrence's own independent rank (e.g. 20 identical low-priority alerts in under a minute from \
-one source is a more concerning PATTERN than any one of them alone; 3 identical routine alerts \
-spread across a whole day usually is not).
+Models reviewing a whole batch at once tend to over-include alerts just because they happened close together in \
+time, even when an alert's own content has no real connection to the rest of the group. Your job is to catch and \
+correct that: for EACH alert_id in the proposed group, ask "does this alert's own content - what it actually \
+describes happening - genuinely connect to the others, or is it only here because it's nearby?" Passive/\
+informational alerts (e.g. a User-Agent string being logged) almost never belong in an active attack sequence just \
+because they occurred nearby in time - remove them unless there's a specific, stated reason they're actually part \
+of the same action chain.
 
-Respond with ONLY a JSON object: {"event_description": "<1-3 sentences on what this repeated \
-pattern most likely indicates and why>", "combined_severity_rank": <integer 1-5, 1=critical \
-... 5=noise, same scale as the independent per-alert ranks>}
+Be willing to shrink the group significantly - down to removing most members, or even down to an empty result - \
+if you don't believe these alerts truly tell one connected story. Do not be deferential to the original proposal; \
+your value here is in catching over-grouping, not rubber-stamping it. At the same time, don't remove an alert that \
+genuinely does belong just to make the group smaller - judge each one on its own merits.
+
+Respond with ONLY a JSON object, nothing else: {"keep_alert_ids": [<subset of the given alert_ids that genuinely \
+belong together - may be the full list, a shorter list, or empty>], "event_description": "<1-3 sentences \
+describing what the KEPT alerts together actually show - ignored if keep_alert_ids has fewer than 2 members>", \
+"combined_severity_rank": <integer 1-5, same scale as before (1=critical, 5=noise), reflecting the KEPT group - \
+ignored if keep_alert_ids has fewer than 2 members>}
 """
 
 
@@ -925,102 +972,98 @@ def _valid_correlation_json(raw: str) -> bool:
     return isinstance(p, dict) and isinstance(p.get("groups"), list)
 
 
-def _group_repeated_alert_types(processed: List[Dict]) -> List[Dict]:
-    """Finds alerts that are the EXACT SAME alert type (same alert_message),
-    firing more than once in this batch - a plain equality check in code,
-    not an LLM judgment call. This half of the feature is 100% reliable
-    regardless of how well any local model reasons, unlike grouping
-    DIFFERENT alert types together (see analyze_correlated_alerts - testing
-    showed no local model here, including a dedicated independent reviewer
-    model, can reliably tell a genuine cross-type attack chain apart from
-    two unrelated alerts that merely share a timestamp/IP)."""
-    by_message: Dict[str, List[Dict]] = {}
-    for item in processed:
-        alert = item["alert_entry"].get("alert", {}) or {}
-        msg = (alert.get("alert_message") or "").strip()
-        if not msg:
-            continue
-        by_message.setdefault(msg, []).append(item)
-    return [
-        {"alert_message": msg, "items": items}
-        for msg, items in by_message.items()
-        if len(items) >= 2
+def _valid_verify_json(raw: str) -> bool:
+    p = parse_json_response(raw, ["keep_alert_ids"])
+    return isinstance(p, dict) and isinstance(p.get("keep_alert_ids"), list)
+
+
+def _verify_correlation_group(ollama_client, model: str, group: Dict,
+                               alert_summaries_by_id: Dict[str, Dict]) -> Tuple[Dict | None, List[Dict]]:
+    """Second LLM pass over ONE already-proposed group: a code-level gap check \
+    can't catch a model claiming "most of the batch is one group", since \
+    alert_ids that are all close together in sequence_position look identical \
+    - in POSITION terms - to a real long sequence. Only re-examining the \
+    actual CONTENT (this call, with a deliberately skeptical prompt and \
+    nothing else in context to anchor on) can catch that kind of \
+    over-grouping. Returns (parsed_result_or_None, attempt_log) - a None \
+    result means the call/parse itself failed, and the caller falls back to \
+    keeping the original unverified group rather than silently discarding a \
+    real finding over a technical hiccup (fail-soft, same pattern as the rest \
+    of this pipeline)."""
+    members = [
+        alert_summaries_by_id[str(aid)]
+        for aid in group["alert_ids"]
+        if str(aid) in alert_summaries_by_id
     ]
-
-
-def _describe_repeated_pattern(ollama_client, model: str, group: Dict,
-                                attempt_log: List[Dict] | None = None) -> Dict:
-    """Asks the ranking model to assess a repeated-alert-type group found by
-    _group_repeated_alert_types() - the GROUPING is already established by
-    exact match, so this only asks the narrower, more tractable question of
-    how concerning the repetition pattern itself is. Degrades to a plain
-    factual description (no rank) on any call/parse failure, rather than
-    silently dropping a group that code has already confirmed is real."""
-    items = group["items"]
-    occurrences = []
-    for it in items:
-        alert = it["alert_entry"].get("alert", {}) or {}
-        occurrences.append({
-            "alert_id": it["alert_entry"].get("alert_id"),
-            "timestamp": alert.get("timestamp"),
-            "source_ip": alert.get("source_ip"),
-            "destination_ip": alert.get("destination_ip"),
-            "independent_severity_rank": _mode_rank(it["ranks"]),
-        })
-    prompt = (
-        f"Alert type (identical for all occurrences below): {group['alert_message']}\n"
-        f"Occurrences in this batch ({len(occurrences)}):\n{json.dumps(occurrences, indent=2)}\n\n"
-        "Assess this repeated pattern per your instructions."
+    user_prompt = (
+        "A colleague proposed that the following alerts form ONE combined/correlated event:\n\n"
+        f"Proposed event_description: {group.get('event_description', '')}\n"
+        f"Proposed combined_severity_rank: {group.get('combined_severity_rank')}\n\n"
+        f"The proposed alerts (in chronological order):\n{json.dumps(members, indent=2)}\n\n"
+        "Critically re-examine this group per your instructions."
     )
-    fallback = {
-        "event_description": f'"{group["alert_message"]}" fired {len(occurrences)} times in this batch.',
-        "combined_severity_rank": None,
-    }
+    attempts: List[Dict] = []
     try:
-        raw = call_ollama_json(ollama_client, model, REPEATED_PATTERN_SYSTEM_PROMPT, prompt,
-                                temperature=RANKING_TEMPERATURE, attempt_log=attempt_log)
-        parsed = parse_json_response(raw, ["event_description"])
-        if not parsed:
-            return fallback
-        try:
-            rank = int(parsed.get("combined_severity_rank"))
-        except (TypeError, ValueError):
-            rank = None
-        return {
-            "event_description": parsed.get("event_description", fallback["event_description"]),
-            "combined_severity_rank": rank if rank in (1, 2, 3, 4, 5) else None,
-        }
+        raw = call_ollama_json(ollama_client, model, CORRELATION_VERIFY_SYSTEM_PROMPT, user_prompt,
+                                temperature=RANKING_TEMPERATURE, validate=_valid_verify_json,
+                                attempt_log=attempts)
+        parsed = parse_json_response(raw, ["keep_alert_ids"])
     except Exception:
-        return fallback
+        parsed = None
+    return parsed, attempts
+
+
+# Max allowed gap between two consecutive members' sequence_position values
+# within an accepted group (e.g. 2 means positions 2 and 4 are still OK - up
+# to 1 unrelated alert interleaved in between - but 2 and 5 is not). Real
+# alert streams interleave related events with unrelated noise, so requiring
+# a PERFECTLY contiguous run (gap of 1) rejected almost every genuine
+# repeated-rule pattern in testing; this tolerates a LITTLE interleaving (at
+# most one unrelated alert between two members) while still refusing to link
+# alerts separated by a larger, unrelated span.
+_MAX_SEQUENCE_GAP = 2
 
 
 def analyze_correlated_alerts(ollama_client, model: str, processed: List[Dict]) -> Dict:
     """Takes the already-independently-ranked `processed` list (one entry per
-    alert, as returned by rank_alert_three_times) for a batch run and finds
-    repeated-same-alert-type groups (_group_repeated_alert_types): found by
-    an exact equality check in CODE, not an LLM judgment call - 100%
-    reliable regardless of model quality. Returned with kind="repeated_verified".
+    alert, as returned by rank_alert_three_times) for a batch run and asks
+    CORRELATION_SYSTEM_PROMPT to look at the WHOLE batch together and suggest
+    groups of alert_ids that collectively tell a more dangerous story than
+    any one of them alone - e.g. alerts 4, 5, 6 together look like a
+    sustained/escalating sequence worth reviewing as one event. This is
+    entirely a model judgment call based on the alerts' own content (not an
+    exact-match/code-confirmed check), so every group returned carries
+    kind="ai_suggested".
 
-    The ranking model (CORRELATION_SYSTEM_PROMPT) is also asked to look at
-    the whole batch for cross-type "attack chain" groups, but those
-    suggestions are discarded rather than shown: testing showed no local
-    model available here - including a dedicated independent reviewer model
-    asked specifically to catch this - can reliably tell a genuine chain
-    apart from two unrelated alerts that merely share a timestamp/IP (both
-    false-accepted and false-rejected a known test case across 2 different
-    judge models and 2 prompt revisions). The call is still made and kept
-    for the ONE part of it that is reliable - when one of its candidate
-    groups happens to match a code-confirmed repeated-type group's exact id
-    set, its narrative is reused instead of spending an extra call.
+    Which alerts are picked and how severe the combination is are the
+    model's judgment call - but WHICH SHAPE a valid group can take is
+    enforced in code, not just prompted: alerts are sorted chronologically
+    and stamped with a sequence_position, and any model-suggested group
+    whose members are spread further apart than _MAX_SEQUENCE_GAP positions
+    is dropped outright - a tight sequence like 2,3,5 (one unrelated alert
+    skipped) is kept, but a wide scattered set like 2,20,38 in a 40-alert
+    batch is never returned, regardless of what the model asked for. A
+    group's SIZE is not capped - it can be any number of alerts, large or
+    small, as long as its members stay close together in sequence.
+
+    That gap check alone can't catch over-grouping where the model claims
+    nearly the WHOLE batch is one group - if those alert_ids are mostly
+    adjacent in sequence, the gaps are all small and the check passes even
+    though the grouping is wrong. So every surviving group also goes through
+    a second, independent LLM pass (_verify_correlation_group) that is shown
+    ONLY that one proposed group - deliberately out of context of the rest of
+    the batch - and asked to skeptically re-examine and, if needed, shrink
+    it. This is still a model judgment call (not a code-level size cap), just
+    a second one dedicated to catching the first call's over-inclusion
+    mistakes instead of trusting its first answer outright.
 
     Only meaningful with more than one alert - callers should skip calling
     this entirely for a single-alert batch rather than relying on this
     function to notice.
 
-    Returns {"groups": [...], "timings": [<stage timing dicts>]}, every
-    group dict carrying kind="repeated_verified". Never raises - a call/
-    parse failure just degrades that part to "nothing found", same fail-soft
-    pattern as the rest of this pipeline."""
+    Returns {"groups": [...], "timings": [<stage timing dicts>]}. Never
+    raises - a call/parse failure just degrades to "nothing found", same
+    fail-soft pattern as the rest of this pipeline."""
     alert_summaries = []
     for item in processed:
         alert = item["alert_entry"].get("alert", {}) or {}
@@ -1048,10 +1091,22 @@ def analyze_correlated_alerts(ollama_client, model: str, processed: List[Dict]) 
             "independent_justification": rep_run.get("model_justification", ""),
         })
 
+    # Sort chronologically and stamp an explicit sequence_position (1 =
+    # earliest) - Snort's native "MM/DD-HH:MM:SS.ffffff" timestamp format is
+    # fixed-width/zero-padded, so a plain string sort is already a correct
+    # chronological sort. This position number is what both the prompt's
+    # "contiguous run" instruction and the code-level contiguity check below
+    # key off of, instead of trusting list order alone.
+    alert_summaries.sort(key=lambda s: s.get("timestamp") or "")
+    for i, s in enumerate(alert_summaries, start=1):
+        s["sequence_position"] = i
+    position_by_id = {str(s["alert_id"]): s["sequence_position"] for s in alert_summaries}
+
     user_prompt = (
         f"Here are {len(alert_summaries)} alerts from the same batch, already ranked "
-        "independently (one at a time). Find any that are related to each other and "
-        "describe the combined event(s), per your instructions:\n\n"
+        "independently (one at a time), listed in CHRONOLOGICAL order with a sequence_position "
+        "field (1 = earliest). Find any that are related to each other and describe the combined "
+        "event(s), per your instructions:\n\n"
         f"{json.dumps(alert_summaries, indent=2)}\n"
     )
 
@@ -1083,42 +1138,87 @@ def analyze_correlated_alerts(ollama_client, model: str, processed: List[Dict]) 
         candidate_groups = []
     timings = [_stage_timing("correlation_llm_call", _t0, _now(), attempts=attempts)]
 
-    # Reliable half: same-alert-type repeats, found in code (not by asking
-    # the model to decide whether they're related - that's already a fact).
-    # Reuses a matching candidate's own narrative (the ranking model often
-    # finds these too) instead of spending an extra call when one already
-    # exists for this exact set of ids; only falls back to a dedicated call
-    # (_describe_repeated_pattern) for a code-confirmed repeat the model's
-    # own candidates didn't happen to cover, so this half is reliable (every
-    # real repeat gets shown) regardless of what the model noticed.
-    _rt0 = _now()
-    repeat_attempts: List[Dict] = []
-    final_groups: List[Dict] = []
-    for rg in _group_repeated_alert_types(processed):
-        ids = [it["alert_entry"].get("alert_id") for it in rg["items"]]
-        id_set = {str(i) for i in ids}
-        match = next(
-            (g for g in candidate_groups if {str(i) for i in g["alert_ids"]} == id_set),
-            None,
+    # Reliability guarantee, enforced in CODE rather than trusted to the
+    # model's compliance: a group is only kept if its alert_ids map to
+    # sequence_position values that stay CLOSE TOGETHER in chronological
+    # order - consecutive members may skip up to _MAX_SEQUENCE_GAP - 1
+    # unrelated alerts in between (real alert streams interleave related
+    # events with unrelated noise - e.g. the same attack rule firing 4 times
+    # with a couple of unrelated alerts from other traffic in between is
+    # still one real pattern), but a group may NOT reach far across the
+    # batch to link alerts separated by many unrelated alerts. Any id the
+    # model hallucinated (not in this batch), any duplicate, or any group
+    # with too wide a gap is dropped outright rather than repaired, same
+    # fail-soft pattern as the rest of this pipeline. Kept groups have their
+    # alert_ids reordered into chronological order for display.
+    close_groups = []
+    for g in candidate_groups:
+        positions = [position_by_id.get(str(aid)) for aid in g["alert_ids"]]
+        if any(p is None for p in positions) or len(set(positions)) != len(positions):
+            continue
+        ordered_positions = sorted(positions)
+        gaps_ok = all(
+            b - a <= _MAX_SEQUENCE_GAP
+            for a, b in zip(ordered_positions, ordered_positions[1:])
         )
-        if match is not None:
-            candidate_groups.remove(match)
-            desc = match
-        else:
-            desc = _describe_repeated_pattern(ollama_client, model, rg, attempt_log=repeat_attempts)
-        final_groups.append({
-            "alert_ids": ids,
-            "event_description": desc["event_description"],
-            "combined_severity_rank": desc["combined_severity_rank"],
-            "kind": "repeated_verified",
-        })
-    if repeat_attempts:
-        timings.append(_stage_timing("repeated_pattern_llm_call", _rt0, _now(), attempts=repeat_attempts))
+        if not gaps_ok:
+            continue
+        ordered = [aid for _, aid in sorted(zip(positions, g["alert_ids"]))]
+        close_groups.append({**g, "alert_ids": ordered})
+    candidate_groups = close_groups
 
-    # Whatever candidate groups are left (cross-type, or a repeat the
-    # exact-match check above didn't recognize for some reason) are
-    # discarded rather than shown - see this function's docstring for why
-    # the cross-type half isn't reliable enough to surface.
+    # Second LLM pass per surviving group: a dedicated, skeptical re-check
+    # that only sees this one proposed group (not the whole batch), asked to
+    # shrink it if any member doesn't genuinely belong. Catches the
+    # "swallowed most of the batch" failure mode the gap filter above can't -
+    # see analyze_correlated_alerts' docstring.
+    alert_summaries_by_id = {str(s["alert_id"]): s for s in alert_summaries}
+    verified_groups: List[Dict] = []
+    for g in candidate_groups:
+        _tv0 = _now()
+        verify_result, verify_attempts = _verify_correlation_group(
+            ollama_client, model, g, alert_summaries_by_id
+        )
+        timings.append(_stage_timing("correlation_verify_llm_call", _tv0, _now(), attempts=verify_attempts))
+
+        if not isinstance(verify_result, dict) or not isinstance(verify_result.get("keep_alert_ids"), list):
+            # Verify call/parse failed - fall back to the original,
+            # unverified group rather than discarding a real finding over a
+            # technical hiccup.
+            verified_groups.append(g)
+            continue
+
+        keep_ids_set = {str(k) for k in verify_result["keep_alert_ids"]}
+        new_ids = [aid for aid in g["alert_ids"] if str(aid) in keep_ids_set]
+        if len(new_ids) < 2:
+            continue  # the second pass decided these alerts don't really belong together
+
+        new_positions = sorted(position_by_id.get(str(aid)) for aid in new_ids)
+        if any(p is None for p in new_positions) or not all(
+            b - a <= _MAX_SEQUENCE_GAP for a, b in zip(new_positions, new_positions[1:])
+        ):
+            continue  # shrinking left a scattered remainder - don't report it
+
+        try:
+            rank = int(verify_result.get("combined_severity_rank"))
+        except (TypeError, ValueError):
+            rank = None
+        verified_groups.append({
+            "alert_ids": new_ids,
+            "event_description": verify_result.get("event_description") or g["event_description"],
+            "combined_severity_rank": rank if rank in (1, 2, 3, 4, 5) else g["combined_severity_rank"],
+        })
+    candidate_groups = verified_groups
+
+    final_groups = [
+        {
+            "alert_ids": g["alert_ids"],
+            "event_description": g["event_description"],
+            "combined_severity_rank": g["combined_severity_rank"],
+            "kind": "ai_suggested",
+        }
+        for g in candidate_groups
+    ]
 
     return {"groups": final_groups, "timings": timings}
 
