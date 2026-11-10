@@ -855,7 +855,7 @@ def rank_one_alert(ollama_client, ranking_model: str, alert_entry: Dict,
                 f"Your severity_rank: {rank}\nSnort priority: {snort_priority} "
                 f"(expected new-rank range: {expected[0]}-{expected[1]})\n\n"
                 f"{rule_doc_section}"
-                f"Retrieved document context:\n{context[:3000]}\n"
+                f"Retrieved document context:\n{context[:4000]}\n"
             )
             _t0 = _now()
             mismatch_attempts: List[Dict] = []
