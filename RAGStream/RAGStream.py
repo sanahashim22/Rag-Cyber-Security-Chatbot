@@ -22,11 +22,10 @@ EMBED_BATCH_SIZE = 32
 MAX_EMBED_CHARS = 3000
 
 
-# OLLAMA_HOST = "https://recipient-duty-untwist.ngrok-free.dev"
-# ollama_client = ollama.Client(
-#     host=OLLAMA_HOST,
-#     headers={"ngrok-skip-browser-warning": "true"}
-# )
+# Lets GPU-vs-CPU timing tests point at a remote Ollama (e.g. one running on
+# a GPU machine and exposed via `ngrok http 11434`) without touching code -
+# see run_gpu_test.ps1. Unset (the normal case), this is just localhost.
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 
 # timeout=180: the ollama python client has NO request timeout by default
 # (it wraps httpx with an unbounded read timeout), so a model that gets
@@ -35,7 +34,15 @@ MAX_EMBED_CHARS = 3000
 # nothing to cut it off. 180s is generous for any normal call; past that,
 # something is genuinely stuck and should fail (and get retried/defaulted)
 # rather than freeze the whole app.
-ollama_client = ollama.Client(host="http://localhost:11434", timeout=180)
+#
+# ngrok-skip-browser-warning: harmless against localhost, but required
+# against a free-tier ngrok URL - without it, ngrok's HTML interstitial
+# warning page comes back instead of the actual Ollama response.
+ollama_client = ollama.Client(
+    host=OLLAMA_HOST,
+    headers={"ngrok-skip-browser-warning": "true"},
+    timeout=180,
+)
 
 # Try to import advanced libraries for DB and Hybrid Search
 try:

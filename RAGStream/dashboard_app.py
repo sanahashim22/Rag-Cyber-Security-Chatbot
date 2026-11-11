@@ -32,7 +32,7 @@ from openpyxl.utils import get_column_letter
 
 from load_documents import load_all_from_docs_folder, list_loaded_documents
 import snort_ranking
-from RAGStream import ADVANCED_MODE, ConvoRAG, DEFAULT_CYBERSECURITY_INFO, chunk_text_with_overlap, ollama_client
+from RAGStream import ADVANCED_MODE, ConvoRAG, DEFAULT_CYBERSECURITY_INFO, chunk_text_with_overlap, ollama_client, OLLAMA_HOST
 
 RANKING_MODELS = ["llama3.2", "qwen2.5:1.5b", "phi4-mini", "gemma4:e2b"]
 
@@ -1687,6 +1687,18 @@ with st.status("Loading NIST/ISO knowledge base...", expanded=False) as kb_statu
 chat_slot = init_chatbot_busy_slot()
 
 with st.sidebar:
+    _is_local_ollama = OLLAMA_HOST.startswith("http://localhost") or OLLAMA_HOST.startswith("http://127.0.0.1")
+    _ollama_badge = "🖥️ Local (CPU)" if _is_local_ollama else "🌐 Remote (GPU test)"
+    st.markdown(
+        f"""
+        <div class="info-card">
+            <div class="info-card-title">⚙️ Ollama target</div>
+            <p style="margin:0;">{_ollama_badge}<br/><code style="font-size:0.75em;">{html.escape(OLLAMA_HOST)}</code></p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
     doc_list_html = "".join(f"<li>{html.escape(name)}</li>" for name in doc_names) or "<li>Built-in NIST CSF 2.0 summary</li>"
     st.markdown(
         f"""
