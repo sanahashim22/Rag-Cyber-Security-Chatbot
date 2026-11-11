@@ -8,3 +8,8 @@ __pycache__/
 venv/
 *.sqlite3
 chroma_db/
+
+# Snort alerts JSON files dropped here for the dashboard to auto-detect -
+# test/working data, not project source
+RAGStream/alert_inputs/*
+!RAGStream/alert_inputs/.gitkeep

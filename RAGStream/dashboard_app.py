@@ -22,6 +22,7 @@ import json
 from collections import Counter
 from datetime import datetime
 from io import BytesIO
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -41,6 +42,12 @@ RANKING_MODELS = ["llama3.2", "qwen2.5:1.5b", "phi4-mini", "gemma4:e2b"]
 # comparison tab, x4 models) is slow on local models, same threshold the old
 # chat interface used.
 AUTO_RUN_LIMIT = 10
+
+# Drop alert JSON files here instead of using an upload button - every *.json
+# file present gets picked up and combined into one pool on each run. Created
+# on first launch if missing.
+ALERT_INPUTS_DIR = Path(__file__).resolve().parent / "alert_inputs"
+ALERT_INPUTS_DIR.mkdir(exist_ok=True)
 
 DASHBOARD_VERSION = "v1.1"
 
@@ -1727,49 +1734,67 @@ with st.sidebar:
         st.markdown('<div class="info-card-title">\U0001f3af Severity scale</div>', unsafe_allow_html=True)
         severity_legend()
 
-uploaded_file = st.file_uploader(
-    "Upload Snort/Suricata alerts (JSON)", type=["json"], key="alerts_file_uploader",
-)
-
 # NOTE: render_chatbot_widget() is intentionally NOT called here anymore.
 # It must run after every other stateful widget that belongs to whichever
 # code path is about to end the script (st.stop() or falling off the end) -
 # see render_chatbot_widget()'s docstring for why. Since different runs
-# st.stop() at different points below (no upload yet, bad JSON, no entries,
-# the AUTO_RUN_LIMIT confirm step, or the full tabs), it's called once right
+# st.stop() at different points below (no files yet, no valid alerts, the
+# AUTO_RUN_LIMIT confirm step, or the full tabs), it's called once right
 # before each of those exit points instead of once up here.
 
-if uploaded_file is None:
-    st.info("Upload a JSON alerts file to begin - a single alert object, a list of alerts, or an `{\"alerts\": [...]}` export are all accepted.")
-    render_chatbot_widget(rag_system)
-    st.stop()
+alert_files = sorted(ALERT_INPUTS_DIR.glob("*.json"))
 
-raw_bytes = uploaded_file.getvalue()
-fhash = hashlib.md5(raw_bytes).hexdigest()
-
-try:
-    data = json.loads(raw_bytes.decode("utf-8", errors="ignore"))
-except Exception as e:
-    st.error(f"Could not parse `{uploaded_file.name}` as JSON: {e}")
-    render_chatbot_widget(rag_system)
-    st.stop()
-
-if not snort_ranking.is_snort_alerts_payload(data):
-    st.error(
-        f"`{uploaded_file.name}` doesn't look like a Snort alerts file (expected fields like "
-        "`sid`, `priority`, or an `alerts` list). Please upload a Snort/Suricata alerts JSON export."
+if not alert_files:
+    st.info(
+        f"Drop one or more Snort/Suricata alerts JSON files into the folder below, then reload this "
+        f"page - a single alert object, a list of alerts, or an `{{\"alerts\": [...]}}` export are all "
+        f"accepted, per file:\n\n`{ALERT_INPUTS_DIR}`"
     )
     render_chatbot_widget(rag_system)
     st.stop()
 
-entries = snort_ranking.extract_alert_entries(data)
+entries: List[Dict] = []
+file_summaries: List[tuple] = []  # (filename, alert_count)
+combined_hasher = hashlib.md5()
+
+for path in alert_files:
+    raw_bytes = path.read_bytes()
+    combined_hasher.update(path.name.encode("utf-8"))
+    combined_hasher.update(raw_bytes)
+
+    try:
+        data = json.loads(raw_bytes.decode("utf-8", errors="ignore"))
+    except Exception as e:
+        st.warning(f"Skipping `{path.name}` - could not parse as JSON: {e}")
+        continue
+
+    if not snort_ranking.is_snort_alerts_payload(data):
+        st.warning(
+            f"Skipping `{path.name}` - doesn't look like a Snort alerts file (expected fields like "
+            "`sid`, `priority`, or an `alerts` list)."
+        )
+        continue
+
+    file_entries = snort_ranking.extract_alert_entries(data)
+    if not file_entries:
+        st.warning(f"Skipping `{path.name}` - recognized as a Snort alerts file but contained no alerts.")
+        continue
+
+    entries.extend(file_entries)
+    file_summaries.append((path.name, len(file_entries)))
+
 if not entries:
-    st.error(f"`{uploaded_file.name}` was recognized as a Snort alerts file but contained no alerts.")
+    st.error(f"No valid alerts found in any file under `{ALERT_INPUTS_DIR}`.")
     render_chatbot_widget(rag_system)
     st.stop()
 
+fhash = combined_hasher.hexdigest()
 total_parsed = len(entries)
-st.success(f"Parsed {total_parsed} alert(s) from `{uploaded_file.name}`.")
+
+file_list_str = ", ".join(f"`{name}` ({n})" for name, n in file_summaries)
+st.success(
+    f"Found {len(file_summaries)} file(s) in `alert_inputs/`, **{total_parsed} alerts combined**: {file_list_str}"
+)
 
 if total_parsed > AUTO_RUN_LIMIT:
     confirm_key = f"confirmed_count::{fhash}"
@@ -1778,9 +1803,9 @@ if total_parsed > AUTO_RUN_LIMIT:
         with st.container(border=True):
             st.markdown(f'<div class="info-card-title">⚠️ {total_parsed} alerts found</div>', unsafe_allow_html=True)
             st.write(
-                f"This file has **{total_parsed} alerts**. Ranking all of them (3 runs per alert, "
-                "x4 models in the 4-Model Comparison tab) can take a while on local models. "
-                "Choose how many to process below."
+                f"These {len(file_summaries)} file(s) have **{total_parsed} alerts combined**. Ranking all of "
+                "them (3 runs per alert, x4 models in the 4-Model Comparison tab) can take a while on local "
+                "models. Choose how many to process below."
             )
             # Wrapped in a form so pressing Enter after typing a number submits
             # immediately (acts like clicking "Process entered number") instead
