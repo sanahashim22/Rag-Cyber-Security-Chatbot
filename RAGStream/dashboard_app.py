@@ -1742,59 +1742,99 @@ with st.sidebar:
 # AUTO_RUN_LIMIT confirm step, or the full tabs), it's called once right
 # before each of those exit points instead of once up here.
 
-alert_files = sorted(ALERT_INPUTS_DIR.glob("*.json"))
+def _scan_alert_inputs() -> Dict[str, Any]:
+    """One pass over ALERT_INPUTS_DIR. Pure data, no st.* calls, so it's safe
+    to call from both the live-polling fragment and (indirectly, via its
+    cached result) the main script body."""
+    alert_files = sorted(ALERT_INPUTS_DIR.glob("*.json"))
+    entries: List[Dict] = []
+    file_summaries: List[tuple] = []  # (filename, alert_count)
+    warnings: List[str] = []
+    combined_hasher = hashlib.md5()
 
-if not alert_files:
-    st.info(
-        f"Drop one or more Snort/Suricata alerts JSON files into the folder below, then reload this "
-        f"page - a single alert object, a list of alerts, or an `{{\"alerts\": [...]}}` export are all "
-        f"accepted, per file:\n\n`{ALERT_INPUTS_DIR}`"
-    )
-    render_chatbot_widget(rag_system)
-    st.stop()
+    for path in alert_files:
+        raw_bytes = path.read_bytes()
+        combined_hasher.update(path.name.encode("utf-8"))
+        combined_hasher.update(raw_bytes)
 
-entries: List[Dict] = []
-file_summaries: List[tuple] = []  # (filename, alert_count)
-combined_hasher = hashlib.md5()
+        try:
+            data = json.loads(raw_bytes.decode("utf-8", errors="ignore"))
+        except Exception as e:
+            warnings.append(f"Skipping `{path.name}` - could not parse as JSON: {e}")
+            continue
 
-for path in alert_files:
-    raw_bytes = path.read_bytes()
-    combined_hasher.update(path.name.encode("utf-8"))
-    combined_hasher.update(raw_bytes)
+        if not snort_ranking.is_snort_alerts_payload(data):
+            warnings.append(
+                f"Skipping `{path.name}` - doesn't look like a Snort alerts file (expected fields like "
+                "`sid`, `priority`, or an `alerts` list)."
+            )
+            continue
 
-    try:
-        data = json.loads(raw_bytes.decode("utf-8", errors="ignore"))
-    except Exception as e:
-        st.warning(f"Skipping `{path.name}` - could not parse as JSON: {e}")
-        continue
+        file_entries = snort_ranking.extract_alert_entries(data)
+        if not file_entries:
+            warnings.append(f"Skipping `{path.name}` - recognized as a Snort alerts file but contained no alerts.")
+            continue
 
-    if not snort_ranking.is_snort_alerts_payload(data):
-        st.warning(
-            f"Skipping `{path.name}` - doesn't look like a Snort alerts file (expected fields like "
-            "`sid`, `priority`, or an `alerts` list)."
+        entries.extend(file_entries)
+        file_summaries.append((path.name, len(file_entries)))
+
+    return {
+        "alert_files": alert_files,
+        "entries": entries,
+        "file_summaries": file_summaries,
+        "warnings": warnings,
+        "fhash": combined_hasher.hexdigest(),
+        "total_parsed": len(entries),
+    }
+
+
+@st.fragment(run_every=4)
+def _alert_inputs_status() -> None:
+    """Live-polls alert_inputs/ every few seconds and renders just this one
+    status banner - independently of the rest of the page, so dropping a new
+    file in shows up here within a few seconds without disturbing whatever
+    ranking results are already on screen below. The actual ranking run only
+    ever uses whatever's in the folder at the moment "Run ranking" is clicked
+    (a real full-page rerun), via the scan cached into session_state here."""
+    scan = _scan_alert_inputs()
+    st.session_state["alert_inputs_scan"] = scan
+
+    if not scan["alert_files"]:
+        st.info(
+            f"Drop one or more Snort/Suricata alerts JSON files into the folder below - a single alert "
+            f"object, a list of alerts, or an `{{\"alerts\": [...]}}` export are all accepted, per file. "
+            f"This updates automatically every few seconds:\n\n`{ALERT_INPUTS_DIR}`"
         )
-        continue
+        return
 
-    file_entries = snort_ranking.extract_alert_entries(data)
-    if not file_entries:
-        st.warning(f"Skipping `{path.name}` - recognized as a Snort alerts file but contained no alerts.")
-        continue
+    for w in scan["warnings"]:
+        st.warning(w)
 
-    entries.extend(file_entries)
-    file_summaries.append((path.name, len(file_entries)))
+    if not scan["entries"]:
+        st.error(f"No valid alerts found in any file under `{ALERT_INPUTS_DIR}`.")
+        return
 
-if not entries:
-    st.error(f"No valid alerts found in any file under `{ALERT_INPUTS_DIR}`.")
+    file_list_str = ", ".join(f"`{name}` ({n})" for name, n in scan["file_summaries"])
+    st.success(
+        f"Found {len(scan['file_summaries'])} file(s) in `alert_inputs/`, "
+        f"**{scan['total_parsed']} alerts combined**: {file_list_str}"
+    )
+    st.caption(
+        "This count updates automatically as files are added/removed - click \"Run ranking\" below "
+        "whenever you want to process the current set."
+    )
+
+
+_alert_inputs_status()
+_scan = st.session_state.get("alert_inputs_scan", {"alert_files": [], "entries": [], "fhash": "", "total_parsed": 0})
+
+if not _scan["alert_files"] or not _scan["entries"]:
     render_chatbot_widget(rag_system)
     st.stop()
 
-fhash = combined_hasher.hexdigest()
-total_parsed = len(entries)
-
-file_list_str = ", ".join(f"`{name}` ({n})" for name, n in file_summaries)
-st.success(
-    f"Found {len(file_summaries)} file(s) in `alert_inputs/`, **{total_parsed} alerts combined**: {file_list_str}"
-)
+entries: List[Dict] = _scan["entries"]
+fhash = _scan["fhash"]
+total_parsed = _scan["total_parsed"]
 
 if total_parsed > AUTO_RUN_LIMIT:
     confirm_key = f"confirmed_count::{fhash}"
@@ -1803,7 +1843,7 @@ if total_parsed > AUTO_RUN_LIMIT:
         with st.container(border=True):
             st.markdown(f'<div class="info-card-title">⚠️ {total_parsed} alerts found</div>', unsafe_allow_html=True)
             st.write(
-                f"These {len(file_summaries)} file(s) have **{total_parsed} alerts combined**. Ranking all of "
+                f"These {len(_scan['file_summaries'])} file(s) have **{total_parsed} alerts combined**. Ranking all of "
                 "them (3 runs per alert, x4 models in the 4-Model Comparison tab) can take a while on local "
                 "models. Choose how many to process below."
             )
