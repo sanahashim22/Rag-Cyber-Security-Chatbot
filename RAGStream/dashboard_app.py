@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import re
 from collections import Counter
 from datetime import datetime
 from io import BytesIO
@@ -26,6 +27,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
+import requests
 import streamlit as st
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -48,6 +50,14 @@ AUTO_RUN_LIMIT = 10
 # on first launch if missing.
 ALERT_INPUTS_DIR = Path(__file__).resolve().parent / "alert_inputs"
 ALERT_INPUTS_DIR.mkdir(exist_ok=True)
+
+# The exact strings IDS-Dashboard's GET /export accepts for its `length`
+# query param - from its own src/ids/combined_detections.py WINDOW_LENGTHS.
+# No option below "5 minutes" exists on their side, so none is offered here.
+IDS_DASHBOARD_WINDOW_LENGTHS = [
+    "5 minutes", "10 minutes", "15 minutes", "30 minutes",
+    "1 hour", "3 hours", "6 hours", "12 hours", "1 day", "7 days",
+]
 
 DASHBOARD_VERSION = "v1.1"
 
@@ -1748,6 +1758,7 @@ def _scan_alert_inputs() -> Dict[str, Any]:
     cached result) the main script body."""
     alert_files = sorted(ALERT_INPUTS_DIR.glob("*.json"))
     entries: List[Dict] = []
+    entries_by_file: Dict[str, List[Dict]] = {}  # filename -> just that file's entries
     file_summaries: List[tuple] = []  # (filename, alert_count)
     warnings: List[str] = []
     combined_hasher = hashlib.md5()
@@ -1776,16 +1787,90 @@ def _scan_alert_inputs() -> Dict[str, Any]:
             continue
 
         entries.extend(file_entries)
+        entries_by_file[path.name] = file_entries
         file_summaries.append((path.name, len(file_entries)))
 
     return {
         "alert_files": alert_files,
         "entries": entries,
+        "entries_by_file": entries_by_file,
         "file_summaries": file_summaries,
         "warnings": warnings,
         "fhash": combined_hasher.hexdigest(),
         "total_parsed": len(entries),
     }
+
+
+def _safe_alert_filename(raw_name: str) -> str:
+    """Basename only (blocks path traversal), non-filename-safe characters
+    replaced, guaranteed .json extension - same policy as alert_receiver.py's
+    _safe_filename, duplicated here since this runs in-process, not as a
+    separate script."""
+    name = Path(raw_name).name
+    name = re.sub(r"[^A-Za-z0-9._-]", "_", name) or "received"
+    if not name.lower().endswith(".json"):
+        name += ".json"
+    return name
+
+
+def _unique_alert_inputs_path(name: str) -> Path:
+    candidate = ALERT_INPUTS_DIR / name
+    if not candidate.exists():
+        return candidate
+    stem, ext = name.rsplit(".", 1)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return ALERT_INPUTS_DIR / f"{stem}_{stamp}.{ext}"
+
+
+def _pull_from_ids_dashboard(
+    base_url: str, token: str, *, length: str | None = None, last_n: int | None = None,
+) -> tuple[bool, str]:
+    """Calls IDS-Dashboard's GET /export for a time window, or GET
+    /export/selection/file for a count-based pull (see its
+    src/dashboard_api.py - GET /export's `length` has no count mode at all;
+    /export/selection/file takes a `last` (newest N alerts by count) filter
+    instead). Exactly one of `length`/`last_n` should be given. Saves the
+    response into ALERT_INPUTS_DIR. Returns (success, message) - never
+    raises, so the caller can just show whatever message comes back."""
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    label = f"last {last_n} alert(s)" if last_n is not None else f"the last {length}"
+
+    if last_n is not None:
+        url = base_url.rstrip("/") + "/export/selection/file"
+        params = {"last": last_n}
+    else:
+        url = base_url.rstrip("/") + "/export"
+        params = {"length": length}
+
+    try:
+        # 120s, not a short default: building the combined export (SQLite
+        # query + rule-doc join) can genuinely take a while on the sensor
+        # VM for a larger window, especially the first call.
+        resp = requests.get(url, params=params, headers=headers, timeout=120)
+    except requests.RequestException as e:
+        return False, f"Could not reach {url}: {e}"
+
+    if resp.status_code != 200:
+        try:
+            detail = resp.json().get("error", resp.text[:300])
+        except Exception:
+            detail = resp.text[:300]
+        return False, f"IDS-Dashboard returned {resp.status_code}: {detail}"
+
+    content_disp = resp.headers.get("Content-Disposition", "")
+    m = re.search(r'filename="?([^";]+)"?', content_disp)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    tag = f"last{last_n}" if last_n is not None else length.replace(" ", "_")
+    fallback_name = f"ids_dashboard_{tag}_{stamp}.json"
+    dest = _unique_alert_inputs_path(_safe_alert_filename(m.group(1) if m else fallback_name))
+    dest.write_bytes(resp.content)
+
+    n_snort = resp.headers.get("X-Alerts-Snort", "?")
+    n_suricata = resp.headers.get("X-Alerts-Suricata", "?")
+    return True, (
+        f"Saved `{dest.name}` ({len(resp.content)} bytes) - "
+        f"{n_snort} Snort + {n_suricata} Suricata alert(s) for {label}."
+    )
 
 
 @st.fragment(run_every=4)
@@ -1826,15 +1911,80 @@ def _alert_inputs_status() -> None:
 
 
 _alert_inputs_status()
-_scan = st.session_state.get("alert_inputs_scan", {"alert_files": [], "entries": [], "fhash": "", "total_parsed": 0})
+
+with st.expander("\U0001f4e5 Receive from IDS-Dashboard", expanded=False):
+    st.caption(
+        "Pulls alerts from IDS-Dashboard's export API and saves them into `alert_inputs/` - "
+        "same as dropping a file in by hand."
+    )
+    pull_col1, pull_col2 = st.columns(2)
+    with pull_col1:
+        ids_base_url = st.text_input(
+            "IDS-Dashboard base URL", value=st.session_state.get("ids_base_url", "http://172.16.20.142:8501"),
+            key="ids_base_url",
+        )
+    with pull_col2:
+        ids_api_token = st.text_input(
+            "IDS_API_TOKEN", value=st.session_state.get("ids_api_token", ""), type="password", key="ids_api_token",
+        )
+
+    ids_pull_mode = st.radio(
+        "Pull by", ["Time window", "Last N alerts"], horizontal=True, key="ids_pull_mode",
+    )
+    if ids_pull_mode == "Time window":
+        ids_window = st.selectbox("Time window", IDS_DASHBOARD_WINDOW_LENGTHS, index=0, key="ids_window_length")
+        ids_last_n = None
+        pull_label = f"last {ids_window}"
+    else:
+        ids_last_n = st.number_input("Number of alerts", min_value=1, max_value=150_000, value=5, step=1, key="ids_last_n")
+        ids_window = None
+        pull_label = f"last {int(ids_last_n)} alert(s)"
+
+    if st.button("▶ Pull alerts now", key="pull_ids_dashboard_btn"):
+        with st.spinner(f"Pulling {pull_label} from {ids_base_url}..."):
+            ok, msg = _pull_from_ids_dashboard(
+                ids_base_url, ids_api_token,
+                length=ids_window, last_n=int(ids_last_n) if ids_last_n is not None else None,
+            )
+        if ok:
+            st.success(msg)
+            st.rerun()
+        else:
+            st.error(msg)
+
+_scan = st.session_state.get(
+    "alert_inputs_scan",
+    {"alert_files": [], "entries": [], "entries_by_file": {}, "file_summaries": [], "fhash": "", "total_parsed": 0},
+)
 
 if not _scan["alert_files"] or not _scan["entries"]:
     render_chatbot_widget(rag_system)
     st.stop()
 
-entries: List[Dict] = _scan["entries"]
-fhash = _scan["fhash"]
-total_parsed = _scan["total_parsed"]
+_ALL_FILES_CHOICE = "All files (combined)"
+file_choice = st.selectbox(
+    "\U0001f4c4 Which file do you want to rank?",
+    [_ALL_FILES_CHOICE] + [name for name, _ in _scan["file_summaries"]],
+    index=0,
+    key="rank_file_choice",
+)
+
+if file_choice == _ALL_FILES_CHOICE:
+    entries: List[Dict] = _scan["entries"]
+else:
+    entries = _scan["entries_by_file"].get(file_choice, [])
+
+# Distinct from _scan["fhash"] (which only tracks the folder's raw contents,
+# for the live-polling banner) - this one also changes when the file choice
+# changes, so cached ranking results and the AUTO_RUN_LIMIT confirmation
+# below don't get reused across different file selections.
+fhash = f"{_scan['fhash']}::{file_choice}"
+total_parsed = len(entries)
+
+if not entries:
+    st.warning(f"No valid alerts found in `{file_choice}`.")
+    render_chatbot_widget(rag_system)
+    st.stop()
 
 if total_parsed > AUTO_RUN_LIMIT:
     confirm_key = f"confirmed_count::{fhash}"
@@ -1843,7 +1993,7 @@ if total_parsed > AUTO_RUN_LIMIT:
         with st.container(border=True):
             st.markdown(f'<div class="info-card-title">⚠️ {total_parsed} alerts found</div>', unsafe_allow_html=True)
             st.write(
-                f"These {len(_scan['file_summaries'])} file(s) have **{total_parsed} alerts combined**. Ranking all of "
+                f"**{file_choice}** has **{total_parsed} alerts**. Ranking all of "
                 "them (3 runs per alert, x4 models in the 4-Model Comparison tab) can take a while on local "
                 "models. Choose how many to process below."
             )
