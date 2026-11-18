@@ -22,6 +22,9 @@ param(
     [string]$OllamaHost
 )
 
-$env:OLLAMA_HOST = $OllamaHost
-Write-Host "Using remote Ollama host: $env:OLLAMA_HOST" -ForegroundColor Cyan
+# RAG_OLLAMA_HOST, not OLLAMA_HOST - the latter is Ollama's own server-side
+# bind-address variable; reusing it here would collide with it on machines
+# where OLLAMA_HOST is already set system-wide for the server itself.
+$env:RAG_OLLAMA_HOST = $OllamaHost
+Write-Host "Using remote Ollama host: $env:RAG_OLLAMA_HOST" -ForegroundColor Cyan
 python -m streamlit run dashboard_app.py

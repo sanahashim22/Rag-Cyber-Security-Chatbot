@@ -25,7 +25,16 @@ MAX_EMBED_CHARS = 3000
 # Lets GPU-vs-CPU timing tests point at a remote Ollama (e.g. one running on
 # a GPU machine and exposed via `ngrok http 11434`) without touching code -
 # see run_gpu_test.ps1. Unset (the normal case), this is just localhost.
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+#
+# Deliberately NOT named OLLAMA_HOST: that name is Ollama's own env var for
+# which interface its *server* binds to (e.g. people set OLLAMA_HOST=0.0.0.0
+# system-wide so the server is reachable over the LAN/ngrok). If our client
+# read that same name, a leftover OLLAMA_HOST=0.0.0.0 from the server setup
+# would silently get picked up as the *client's* target too - 0.0.0.0 isn't
+# a real connectable address, so every ranking call fails with "could not
+# reach ollama" even though a local Ollama server is running fine.
+RAG_OLLAMA_HOST = os.environ.get("RAG_OLLAMA_HOST")
+OLLAMA_HOST = RAG_OLLAMA_HOST or "http://localhost:11434"
 
 # timeout=180: the ollama python client has NO request timeout by default
 # (it wraps httpx with an unbounded read timeout), so a model that gets
