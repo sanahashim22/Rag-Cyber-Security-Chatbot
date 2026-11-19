@@ -1035,6 +1035,7 @@ def rank_one_alert(ollama_client, ranking_model: str, alert_entry: Dict,
             "rag_relevance_score": relevance_score,
             "rule_doc_sid": ground_truth_sid,
             "rule_doc_block": rule_doc_block,
+            "rule_doc_source": rule_doc_source,
             "snort_priority": snort_priority,
             "expected_new_rank_range": None,
             "mismatch_with_snort": None,
@@ -1106,6 +1107,7 @@ def rank_one_alert(ollama_client, ranking_model: str, alert_entry: Dict,
         "rag_relevance_score": relevance_score,
         "rule_doc_sid": ground_truth_sid,
         "rule_doc_block": rule_doc_block,
+        "rule_doc_source": rule_doc_source,
         "snort_priority": snort_priority,
         "expected_new_rank_range": list(expected) if expected else None,
         "mismatch_with_snort": mismatch,
@@ -1552,17 +1554,18 @@ def build_report_markdown(processed: List[Dict], ranking_model: str) -> str:
         # block below.
         rule_doc_sid = runs[0].get("rule_doc_sid")
         rule_doc_block = runs[0].get("rule_doc_block") or ""
+        rule_doc_source = runs[0].get("rule_doc_source") or "rule_docs_preprocessed_by_sid.json"
         if rule_doc_block:
             lines.append(f"**Rule documentation for this alert (sid {rule_doc_sid}, exact lookup "
-                          f"from `rule_docs_preprocessed_by_sid.json` - not RAG-retrieved, given to "
+                          f"from `{rule_doc_source}` - not RAG-retrieved, given to "
                           f"the model in full):**")
             lines.append("")
             lines.append(rule_doc_block)
             lines.append("")
         else:
             lines.append(f"**Rule documentation:** no entry found for sid {rule_doc_sid} in "
-                          f"`rule_docs_preprocessed_by_sid.json` - skipped, model relied on alert "
-                          f"data + retrieved context only.")
+                          f"intel.db or `rule_docs_preprocessed_by_sid.json` - skipped, model relied "
+                          f"on alert data + retrieved context only.")
             lines.append("")
 
         # Retrieval is deterministic (same alert -> same query -> same
