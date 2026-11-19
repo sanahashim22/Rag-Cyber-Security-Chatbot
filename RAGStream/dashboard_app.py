@@ -20,8 +20,10 @@ import hashlib
 import html
 import json
 import re
+import sqlite3
 from collections import Counter
-from datetime import datetime
+from contextlib import closing
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -1873,6 +1875,98 @@ def _pull_from_ids_dashboard(
     )
 
 
+def _get_remote_intel_info(base_url: str, token: str) -> tuple[dict | None, str]:
+    """GET /intel - IDS-Dashboard's intel.db size/modified date/source dates,
+    without downloading the (~1.4GB) file itself. Returns (info, error);
+    info is None on failure, with error explaining why."""
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    try:
+        resp = requests.get(base_url.rstrip("/") + "/intel", headers=headers, timeout=15)
+    except requests.RequestException as e:
+        return None, f"Could not reach {base_url}: {e}"
+    if resp.status_code != 200:
+        try:
+            detail = resp.json().get("error", resp.text[:300])
+        except Exception:
+            detail = resp.text[:300]
+        return None, f"IDS-Dashboard returned {resp.status_code}: {detail}"
+    try:
+        return resp.json(), ""
+    except Exception as e:
+        return None, f"Unexpected response: {e}"
+
+
+def _get_local_intel_status() -> Dict[str, Any] | None:
+    """Local intel.db's size/modified date/source dates, read straight from
+    the file - no network call. None if it hasn't been downloaded yet."""
+    path = snort_ranking.INTEL_DB_PATH
+    if not path.is_file():
+        return None
+    stat = path.stat()
+    sources: Dict[str, str] = {}
+    try:
+        with closing(sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5)) as con:
+            if con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='source_metadata'"
+            ).fetchone():
+                for source, as_of, imported in con.execute(
+                    "SELECT source, data_as_of, imported_at FROM source_metadata"
+                ):
+                    sources[source] = (as_of or imported or "")[:10]
+    except sqlite3.Error:
+        pass
+    return {
+        "bytes": stat.st_size,
+        "modified": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(timespec="seconds"),
+        "sources": sources,
+    }
+
+
+def _download_intel_db(base_url: str, token: str) -> tuple[bool, str]:
+    """Streams IDS-Dashboard's /intel/intel.db (~1.4GB) into
+    snort_ranking.INTEL_DB_PATH, atomically (temp file + rename - same
+    pattern as intel_lookup.py's own download()). Manual only, by design (no
+    background auto-refresh): the file is too big to poll on every live
+    alert_inputs/ tick, so this only ever runs when the button below is
+    clicked. Never raises."""
+    dest = snort_ranking.INTEL_DB_PATH
+    part = dest.with_name(dest.name + ".part")
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    url = base_url.rstrip("/") + "/intel/intel.db"
+    done = 0
+    total = 0
+    try:
+        with requests.get(url, headers=headers, timeout=60, stream=True) as resp:
+            if resp.status_code != 200:
+                try:
+                    detail = resp.json().get("error", resp.text[:300])
+                except Exception:
+                    detail = resp.text[:300]
+                return False, f"IDS-Dashboard returned {resp.status_code}: {detail}"
+            total = int(resp.headers.get("Content-Length") or 0)
+            progress = st.progress(0.0, text="Downloading intel.db...")
+            with open(part, "wb") as out:
+                for chunk in resp.iter_content(chunk_size=1 << 20):
+                    if not chunk:
+                        continue
+                    out.write(chunk)
+                    done += len(chunk)
+                    if total:
+                        progress.progress(
+                            min(done / total, 1.0),
+                            text=f"Downloading intel.db... {done >> 20}/{total >> 20} MB",
+                        )
+            progress.empty()
+    except requests.RequestException as e:
+        part.unlink(missing_ok=True)
+        return False, f"Could not reach {url}: {e}"
+    if total and done != total:
+        part.unlink(missing_ok=True)
+        return False, f"Download stopped at {done} of {total} bytes; nothing was replaced."
+    part.replace(dest)
+    return True, f"Saved intel.db ({done >> 20} MB)."
+
+
 @st.fragment(run_every=4)
 def _alert_inputs_status() -> None:
     """Live-polls alert_inputs/ every few seconds and renders just this one
@@ -1946,6 +2040,49 @@ with st.expander("\U0001f4e5 Receive from IDS-Dashboard", expanded=False):
                 ids_base_url, ids_api_token,
                 length=ids_window, last_n=int(ids_last_n) if ids_last_n is not None else None,
             )
+        if ok:
+            st.success(msg)
+            st.rerun()
+        else:
+            st.error(msg)
+
+with st.expander("\U0001f5c4️ Threat-intel database (intel.db)", expanded=False):
+    st.caption(
+        "Shared database from the IDS sensor PC (Talos/Snort rule docs, CVEs with CVSS/EPSS/CISA-KEV, "
+        "MITRE ATT&CK). When present, ranking looks up each alert's rule here FIRST, falling back to "
+        "`rule_docs_preprocessed_by_sid.json` only for a sid intel.db doesn't have. Manual refresh only - "
+        "it's about 1.4GB, so it isn't re-checked automatically like the alert folder above."
+    )
+    local_intel = _get_local_intel_status()
+    if local_intel is None:
+        st.info("Not downloaded yet - ranking will use `rule_docs_preprocessed_by_sid.json` only until you download it.")
+    else:
+        sources_str = ", ".join(f"{name} ({date})" for name, date in local_intel["sources"].items()) or "unknown"
+        st.success(
+            f"Local copy: **{local_intel['bytes'] >> 20} MB**, downloaded {local_intel['modified']}. "
+            f"Sources: {sources_str}"
+        )
+
+    if st.button("\U0001f50d Check IDS-Dashboard for updates", key="check_intel_updates_btn"):
+        remote_intel, err = _get_remote_intel_info(ids_base_url, ids_api_token)
+        if remote_intel is None:
+            st.error(err)
+        else:
+            remote_sources_str = ", ".join(
+                f"{name} ({info.get('data_as_of') or info.get('imported_at') or '?'})"
+                for name, info in remote_intel.get("sources", {}).items()
+            ) or "unknown"
+            st.info(
+                f"On IDS-Dashboard: **{remote_intel['bytes'] >> 20} MB**, last modified {remote_intel['modified']}. "
+                f"Sources: {remote_sources_str}"
+            )
+            if local_intel is not None and remote_intel["modified"] <= local_intel["modified"]:
+                st.caption("Your local copy is already up to date.")
+            else:
+                st.caption("IDS-Dashboard's copy is newer than your local one - download below to refresh.")
+
+    if st.button("⬇ Download / update intel.db", key="download_intel_db_btn"):
+        ok, msg = _download_intel_db(ids_base_url, ids_api_token)
         if ok:
             st.success(msg)
             st.rerun()
