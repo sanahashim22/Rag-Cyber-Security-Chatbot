@@ -1544,7 +1544,10 @@ def build_report_markdown(processed: List[Dict], ranking_model: str) -> str:
         lines.append("")
         lines.append(f"## Alert {alert_id}: {msg}")
         lines.append("")
-        lines.append(f"- **Snort priority:** {priority} (sid {sid})")
+        # "Actual ranking" to match the dashboard's own table column, not
+        # "Snort priority" - this alert may be Suricata-origin, same bug
+        # class as the rule-doc source label fixed above.
+        lines.append(f"- **Actual ranking:** {priority} (sid {sid})")
         lines.append(f"- **AI severity ranks (3 runs):** {', '.join(str(r) for r in ranks)}")
         lines.append(f"- **Consistent across 3 runs:** {'✅ Yes' if consistent else '❌ No'}")
         lines.append("")
