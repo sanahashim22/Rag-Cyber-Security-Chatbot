@@ -1537,6 +1537,7 @@ def build_report_markdown(processed: List[Dict], ranking_model: str) -> str:
         msg = alert.get("alert_message", "(no message)")
         sid = alert.get("sid", "?")
         priority = alert.get("priority", "?")
+        source = alert.get("engine", "snort").capitalize()
         runs = item["runs"]
         ranks = item["ranks"]
         consistent = item["consistent"]
@@ -1544,9 +1545,11 @@ def build_report_markdown(processed: List[Dict], ranking_model: str) -> str:
         lines.append("")
         lines.append(f"## Alert {alert_id}: {msg}")
         lines.append("")
-        # "Actual ranking" to match the dashboard's own table column, not
-        # "Snort priority" - this alert may be Suricata-origin, same bug
-        # class as the rule-doc source label fixed above.
+        # Source + "Actual ranking" to match the dashboard's own table
+        # columns, not a flat "Snort priority" - this alert may be
+        # Suricata-origin, same bug class as the rule-doc source label
+        # fixed above.
+        lines.append(f"- **Source:** {source}")
         lines.append(f"- **Actual ranking:** {priority} (sid {sid})")
         lines.append(f"- **AI severity ranks (3 runs):** {', '.join(str(r) for r in ranks)}")
         lines.append(f"- **Consistent across 3 runs:** {'✅ Yes' if consistent else '❌ No'}")
