@@ -13,3 +13,8 @@ chroma_db/
 # test/working data, not project source
 RAGStream/alert_inputs/*
 !RAGStream/alert_inputs/.gitkeep
+
+# Shared threat-intel database downloaded from IDS-Dashboard's /intel/intel.db
+# (~1.4GB, refreshed independently on the IDS sensor PC) - never commit this
+RAGStream/intel.db
+RAGStream/intel.db.part
