@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Tuple
 
 from load_documents import _rule_obj_to_text
+import intel_lookup
 
 
 # ── Timing instrumentation (see render_timing_tab in dashboard_app.py) ──────
@@ -127,6 +128,53 @@ def get_rule_doc_block(sid: Any) -> str:
     if not rule:
         return ""
     return _rule_obj_to_text(rule)
+
+
+# Shared, IDS-sensor-side threat-intel database (Talos/Snort rule docs, CVEs
+# with CVSS/EPSS/CISA-KEV, MITRE ATT&CK) - downloaded from IDS-Dashboard's
+# /intel/intel.db (see dashboard_app.py's "Threat-intel database" panel).
+# Not committed to git (it's ~1.4GB and refreshed independently on the IDS
+# sensor PC) - absent until someone clicks "Download / update" there.
+INTEL_DB_PATH = Path(__file__).parent / "intel.db"
+
+
+def get_intel_db_doc_block(gid: Any, sid: Any, rev: Any, engine: str = "snort") -> str:
+    """Looks up this alert's rule (plus any CVEs/ATT&CK techniques its
+    documentation names) in the shared intel.db, via intel_lookup.py's own
+    lookup()/as_text() - reused as-is rather than re-implemented, so the
+    formatting and schema assumptions stay exactly what that script intends.
+    Returns "" if intel.db hasn't been downloaded yet, or has nothing for
+    this sid (e.g. it's a local/non-Talos-documented rule) - same
+    "skip it, don't error" contract as get_rule_doc_block."""
+    if sid is None or not INTEL_DB_PATH.is_file():
+        return ""
+    rule_id = f"{engine}_signature:{int(gid) if gid is not None else 1}:{int(sid)}:{int(rev) if rev is not None else 1}"
+    try:
+        found = intel_lookup.lookup(INTEL_DB_PATH, [rule_id])
+    except Exception:
+        return ""
+    if not (found.get("rules") or found.get("cves") or found.get("attack_techniques")):
+        return ""
+    return intel_lookup.as_text(found)
+
+
+def get_rule_doc_block_for_alert(alert_entry: Dict) -> Tuple[str, str]:
+    """This alert's rule documentation, tried in order: the shared intel.db
+    first (it's the live/richer source, with CVE+ATT&CK enrichment on top of
+    the rule text), then rule_docs_preprocessed_by_sid.json as a fallback for
+    whatever sid intel.db doesn't have (e.g. intel.db isn't downloaded yet,
+    or this sid is from this project's own rule set rather than the IDS
+    sensor's). Returns (text, source_label); source_label is "" if neither
+    source has this sid."""
+    sid = resolve_ground_truth_sid(alert_entry)
+    alert = alert_entry.get("alert", {}) or {}
+    intel_text = get_intel_db_doc_block(alert.get("gid"), sid, alert.get("rev"))
+    if intel_text:
+        return intel_text, "intel.db"
+    local_text = get_rule_doc_block(sid)
+    if local_text:
+        return local_text, "rule_docs_preprocessed_by_sid.json"
+    return "", ""
 
 # Independent judge model, always used regardless of the model selected in
 # the sidebar for chat/ranking, so it acts as a check rather than the same
@@ -722,13 +770,14 @@ def rank_one_alert(ollama_client, ranking_model: str, alert_entry: Dict,
 
     timings: List[Dict] = []
 
-    # Exact sid lookup against rule_docs_preprocessed_by_sid.json - NOT part
-    # of the RAG/vector retrieval above. If this alert's sid isn't a key in
-    # that table (e.g. a future alert for a rule not in the file yet),
-    # rule_doc_block is just "" and that section is skipped - no error.
+    # Exact sid lookup, tried against the shared intel.db first and then
+    # rule_docs_preprocessed_by_sid.json (see get_rule_doc_block_for_alert) -
+    # NOT part of the RAG/vector retrieval above. If this alert's sid isn't
+    # found in either, rule_doc_block is just "" and that section is
+    # skipped - no error.
     _t0 = _now()
     ground_truth_sid = resolve_ground_truth_sid(alert_entry)
-    rule_doc_block = get_rule_doc_block(ground_truth_sid)
+    rule_doc_block, rule_doc_source = get_rule_doc_block_for_alert(alert_entry)
     timings.append(_stage_timing("rule_doc_lookup", _t0, _now()))
 
     payload_record = {
@@ -738,7 +787,7 @@ def rank_one_alert(ollama_client, ranking_model: str, alert_entry: Dict,
 
     rule_doc_section = (
         f"RULE DOCUMENTATION FOR THIS ALERT (sid {ground_truth_sid}, exact lookup from "
-        f"rule_docs_preprocessed_by_sid.json - given in full, NOT part of the RAG "
+        f"{rule_doc_source} - given in full, NOT part of the RAG "
         f"retrieval below):\n{rule_doc_block}\n\n"
         if rule_doc_block else ""
     )
