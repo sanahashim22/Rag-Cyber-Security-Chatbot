@@ -1,143 +1,78 @@
-# RAGStream Hotel Information Assistant
+# RAGStream - Cybersecurity Standards RAG + Snort/Suricata Alert Ranking
 
-**RAGStream** is an educational Streamlit application that demonstrates **Conversational Retrieval-Augmented Generation (RAG)** for a hotel information system. This application helps hotel guests find information about The Grand Palace Hotel's amenities, services, policies, and booking information through a conversational interface.
+**RAGStream** is the main Streamlit app for this project. It does two things:
 
-This tool builds upon traditional RAG architecture by incorporating advanced features such as conversation history tracking, query classification, and query contextualization. It ensures responses are not only relevant to the current query but also take into account the ongoing conversation, improving the accuracy and coherence of answers.
+1. **Standards Q&A**: ask questions about **NIST Cybersecurity Framework (CSF) 2.0** and **ISO/IEC 27001:2022**, answered via RAG retrieval over the actual standard documents.
+2. **Snort/Suricata alert severity ranking**: rank IDS alerts 1-5 for severity (1 = critical, 5 = informational/noise), 3 times per alert to check consistency, with an independent model scoring the justification's quality against the retrieved evidence.
 
-## Features
+Everything runs locally via **Ollama** - no cloud API calls, fully offline and private.
 
-- **Web-Based Interface**: User-friendly Streamlit application with chat interface and configuration options
-- **Conversational RAG**: Retrieves relevant document chunks based on user queries while maintaining conversation context
-- **Query Classification**: Automatically categorizes queries into different types (hotel-related, compliment, complaint, chitchat, or off-topic)
-- **Query Contextualization**: Enhances brief follow-up queries with conversation history context
-- **Document Chunking**: Processes uploaded documents into manageable chunks with overlap for better context retention
-- **Semantic Search**: Uses vector embeddings and cosine similarity to find the most relevant document chunks
-- **Streaming Responses**: Displays AI responses in real-time as they're generated
-- **Debug Mode**: Optional detailed logging of the system's internal operations for educational purposes
-- **Model Selection**: Choose between different LLMs (Llama3.2, Phi4-mini) for response generation
+> This file covers running the app from inside this `RAGStream/` folder. See the [repo root README](../README.md) for the full project structure and the other (command-line) RAG demos.
 
-## How It Works
-
-The application enhances traditional RAG systems by adding conversational awareness:
-
-1. **Document Processing**:
-   - Upload a text document containing hotel information
-   - The system chunks the document into smaller pieces with overlap
-   - Each chunk is embedded using the specified embedding model
-
-2. **Query Classification**:
-   - When a user submits a query, the system classifies it into one of five categories:
-     - Hotel-related: Questions about amenities, services, policies, etc.
-     - Compliment: Positive feedback or appreciation
-     - Complaint: Negative feedback or dissatisfaction
-     - Chitchat: General conversation not directly related to hotel inquiries
-     - Off-topic: Questions completely unrelated to hotels
-
-3. **Query Handling Based on Type**:
-   - For non-hotel queries, the system generates appropriate responses without using document retrieval
-   - For hotel-related queries, the system proceeds with the RAG process
-
-4. **Query Contextualization**:
-   - Analyzes conversation history to enhance brief follow-up questions
-   - For example, if a user asks "Does the hotel have a pool?" and then "Is it heated?", the system reformulates the second query to "Is the hotel pool heated?"
-
-5. **Semantic Search**:
-   - The contextualized query is embedded using the same model as the documents
-   - Cosine similarity is calculated between the query embedding and each document chunk
-   - The most relevant document chunks are retrieved
-
-6. **Answer Generation**:
-   - The retrieved document chunks are used as context to generate a response using the selected LLM
-   - Responses are streamed to the UI as they're generated
-
-7. **Conversation History Update**:
-   - The query and response are added to the conversation history
-   - This history is used to provide context for future queries
-
-## Requirements
-
-To run RAGStream Hotel Information Assistant, you'll need:
-
-- Python 3.11 or higher
-- Streamlit
-- Numpy
-- Ollama
-- A text document containing hotel information
-
-### Python Dependencies
+## Running it
 
 ```bash
-pip install streamlit numpy ollama
+cd RAGStream
+pip install -r requirements.txt
+pip install pdfplumber  # for loading PDF standards documents into docs/
+streamlit run dashboard_app.py
 ```
 
-### Ollama Configuration
+Open `http://localhost:8501`. Requires [Ollama](https://ollama.com) installed and running locally, with these models pulled:
 
-The application requires [Ollama](https://ollama.ai/) to be installed and the following models to be available:
+- `nomic-embed-text` (embeddings)
+- `llama3.2`, `qwen2.5:1.5b`, `phi4-mini`, `gemma4:e2b` (the 4 selectable ranking models)
+- `gemma2:2b` (fixed judge model)
 
-- `llama3.2` or `phi4-mini` for text generation
-- `nomic-embed-text` for embeddings
+By default this uses your local CPU Ollama. For a remote/GPU Ollama instead (e.g. exposed via `ngrok http 11434`), use `run_gpu_test.ps1` rather than setting `OLLAMA_HOST` yourself:
 
-## How to Run
-
-1. Clone the repository or download the source code
-2. Install the required dependencies
-3. Run the Streamlit application:
-
-```bash
-streamlit run RAGStream.py
+```powershell
+.\run_gpu_test.ps1 -OllamaHost "https://xxxx.ngrok-free.dev"
 ```
 
-4. Open your web browser and navigate to the URL displayed in the terminal
-5. Upload a text document containing hotel information
-6. Start asking questions about the hotel through the chat interface
+(This app reads `RAG_OLLAMA_HOST`, not Ollama's own `OLLAMA_HOST` - deliberately a different name, so a system-wide `OLLAMA_HOST` set for Ollama's *server* bind address never gets mistaken for where this app's *client* should connect.)
 
-## Customization
+(`RAGStream.py` is the older, chat-first app - standards Q&A only, no alert ranking UI. `dashboard_app.py` is the actively maintained one, described below.)
 
-You can customize the application through the Streamlit interface:
+## Getting alerts into the dashboard
 
-- Select different LLM models for response generation
-- Toggle debug mode to view detailed system operations
-- Adjust document chunking parameters in the code (chunk size and overlap)
-- Modify system prompts for different response styles
+- **Drop a file** into `alert_inputs/` - detected live, every few seconds, without restarting Streamlit. Accepts this project's own flat alerts-list format, and IDS-Dashboard's `ids.combined-detections` export format (rule definitions + a packet timeline) - both get normalized into the same shape before ranking.
+- **Receive pushes**: `python alert_receiver.py` listens for alerts pushed from an [IDS-Dashboard](https://github.com/Moeed0/IDS-Dashboard) sensor's own "Send" button and saves them into `alert_inputs/` automatically.
+- **Pull on demand**: the dashboard's "📥 Receive from IDS-Dashboard" panel pulls alerts directly from a sensor's export API - by time window (5 minutes - 7 days) or by "Last N alerts".
+- A dropdown lets you rank one specific file in `alert_inputs/`, or all of them combined. More than 10 alerts combined triggers a confirmation step for how many to actually process.
 
-## Debug Mode
+## Rule documentation & threat intel
 
-Enable debug mode in the sidebar to see detailed information about:
+Each alert's rule documentation is looked up by `sid`, trying two sources in order:
 
-- Document chunking process
-- Embedding dimensions
-- Similarity scores during search
-- Query classification and contextualization
-- Response generation timing
+1. **`intel.db`** - a shared SQLite database (Talos/Snort rule docs, CVEs with CVSS/EPSS/CISA-KEV, MITRE ATT&CK) downloaded from IDS-Dashboard via the "🗄️ Threat-intel database" panel. ~1.4GB, not auto-refreshed (too big to poll live) - use that panel's "Check for updates" / "Download / update" buttons.
+2. **`rule_docs_preprocessed_by_sid.json`** - a local, pre-built table of this project's own Snort ruleset, used as a fallback when intel.db has nothing for that sid (or hasn't been downloaded).
 
-This information is valuable for understanding how the RAG system works and for troubleshooting issues.
+Neither is chunked/embedded/vector-searched - both are exact `sid` dict lookups, independent of the RAG retrieval used for the NIST/ISO context.
 
-## Educational Purpose
+Every table, the Excel export, and the downloadable report show a **Source** column (Snort/Suricata) and an **Actual Ranking** column - the alert's own reported severity. IDS-Dashboard names its own severity in words (Low/Medium/High/Critical); these are shown as e.g. `Critical - 1`, `Low - 4`, using this project's own numbering (1 = most severe) rather than passing the other system's number through as-is.
 
-This application is provided for educational purposes to demonstrate:
+## Files in this folder
 
-- How to implement a conversational RAG system
-- The impact of conversation history on query understanding
-- Query classification techniques
-- Document chunking strategies
-- Vector-based semantic search
-- Integration with local LLMs via Ollama
+| File | Purpose |
+|---|---|
+| `dashboard_app.py` | Main dashboard - Single-Model Ranking, 4-Model Comparison, floating chatbot |
+| `RAGStream.py` | Older chat-first app (standards Q&A only) |
+| `snort_ranking.py` | Alert severity ranking + correlation pipeline |
+| `intel_lookup.py` | Copy of IDS-Dashboard's own script - reads the shared `intel.db` |
+| `alert_receiver.py` | Standalone listener for IDS-Dashboard's "Send" button |
+| `alert_inputs/` | Drop alert JSON files here - not committed to git |
+| `intel.db` | Downloaded on demand (~1.4GB) - not committed to git |
+| `rule_docs_preprocessed_by_sid.json` | Fallback rule-doc lookup table (this project's own ruleset) |
+| `predefined_rules.json` | Reference-only rule rubric - **not** shown to the ranking/judge models |
+| `load_documents.py`, `memory_monitor.py` | Supporting modules |
+| `docs/` | NIST/ISO (and any other) standards documents - chunked + embedded for RAG |
+| `run_gpu_test.ps1` | Launches the app pointed at a remote/GPU Ollama instead of local CPU |
 
-## Limitations
+## Model selection
 
-- The system relies on the quality of document content for accurate answers
-- Very brief follow-up questions might not be contextualized correctly
-- Performance depends on the capabilities of the selected LLM
-- The current implementation only supports text documents
-
-## Disclaimer
-
-This code is provided for educational purposes only and is not intended for production use. It serves as a demonstration of conversational RAG techniques and should be used primarily for learning and experimentation.
+The 4 ranking models (`RANKING_MODELS` in `dashboard_app.py`) and the fixed judge model (`JUDGE_MODEL` in `snort_ranking.py`) can be changed in code.
 
 ## License
 
-This project is licensed under the MIT License with Attribution.
-
-## Author
-
-Based on the original RAGStream concept by Gurucharan MK (2025)
+MIT License - see the [repo root](../LICENSE).
