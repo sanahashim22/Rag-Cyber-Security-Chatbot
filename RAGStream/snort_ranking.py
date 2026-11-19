@@ -432,6 +432,11 @@ must reflect that (low number); if your description says this looks like routine
 activity, the rank must reflect that (high number). A rank that contradicts your own \
 description is wrong.
 
+Note: alert_id is usually a plain number, but when the same number was independently reported by \
+both Snort and Suricata for the same packet, it is disambiguated as e.g. "2 (Snort)" and \
+"2 (Suricata)" - treat these as two different alerts, and if you include one in a group, copy its \
+alert_id value back EXACTLY as given (including the "(Snort)"/"(Suricata)" suffix if present).
+
 Respond with ONLY a JSON object, nothing else: {"groups": [{"alert_ids": [<the alert_id \
 values exactly as given in the input, at least 2 per group>], "event_description": "<text>", \
 "combined_severity_rank": <integer 1-5>}, ...]}. If nothing in this batch looks related, \
@@ -1297,6 +1302,7 @@ def analyze_correlated_alerts(ollama_client, model: str, processed: List[Dict]) 
         )
         alert_summaries.append({
             "alert_id": item["alert_entry"].get("alert_id"),
+            "engine": alert.get("engine", "snort"),
             "alert_message": alert.get("alert_message"),
             "classification": alert.get("classification"),
             "timestamp": alert.get("timestamp"),
@@ -1309,6 +1315,26 @@ def analyze_correlated_alerts(ollama_client, model: str, processed: List[Dict]) 
             "independent_severity_rank": majority,
             "independent_justification": rep_run.get("model_justification", ""),
         })
+
+    # alert_id alone is NOT guaranteed unique here: a combined Snort+Suricata
+    # export numbers alert_id by packet, and both engines can independently
+    # report an alert for the SAME packet number (e.g. packet 2 triggers a
+    # Snort rule AND a Suricata rule) - producing two distinct alerts that
+    # both have alert_id 2. Every later step (the LLM prompt/response, and
+    # the position_by_id/alert_summaries_by_id lookups below) keys off this
+    # "alert_id" value alone, so an unresolved collision would silently merge
+    # or misattribute alerts between engines. Fix it at the source: qualify
+    # only the colliding values with their engine, so each value handed to
+    # (and echoed back by) the model is unique - this also makes the
+    # eventual "Alert IDs" column in the UI show e.g. "2 (Snort), 2
+    # (Suricata)" instead of the ambiguous bare "2, 2".
+    _id_collision_counts: Dict[str, int] = {}
+    for s in alert_summaries:
+        key = str(s["alert_id"])
+        _id_collision_counts[key] = _id_collision_counts.get(key, 0) + 1
+    for s in alert_summaries:
+        if _id_collision_counts.get(str(s["alert_id"]), 0) > 1:
+            s["alert_id"] = f'{s["alert_id"]} ({s["engine"].capitalize()})'
 
     # Sort chronologically and stamp an explicit sequence_position (1 =
     # earliest) - Snort's native "MM/DD-HH:MM:SS.ffffff" timestamp format is
