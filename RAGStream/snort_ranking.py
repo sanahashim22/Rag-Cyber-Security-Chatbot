@@ -467,8 +467,174 @@ ignored if keep_alert_ids has fewer than 2 members>}
 
 # ── Detection & loading ──────────────────────────────────────────────────────
 
+# ── IDS-Dashboard's "ids.combined-detections" export format ─────────────────
+# A SECOND, separate accepted input shape (pulled/received from the IDS
+# sensor PC - see dashboard_app.py's "Receive from IDS-Dashboard" panel),
+# alongside this project's own flat alerts-list format (enriched_snort_
+# alerts.json and friends) which is left completely untouched below: a file
+# named like that still goes through exactly the same path it always has.
+# This format groups rule definitions separately from their occurrences
+# (data["rules"]: one entry per distinct rule, keyed by a composite id;
+# data["packets"]: a timeline of which rule(s) fired on which packet) rather
+# than listing one flat record per alert - so it needs its own extraction
+# step to produce this project's usual one-entry-per-alert-occurrence shape.
+# Rule documentation for these alerts comes from the shared intel.db (see
+# get_rule_doc_block_for_alert) since these are the IDS sensor's own sids,
+# not necessarily ones in this project's rule_docs_preprocessed_by_sid.json.
+
+_COMBINED_RULE_KEY_RE = re.compile(r"^(snort|suricata)(?:_signature)?:(\d+)(?::(\d+))?(?::(\d+))?$")
+_REV_IN_RULE_TEXT_RE = re.compile(r"\brev\s*:\s*(\d+)\s*;")
+_MSG_IN_RULE_TEXT_RE = re.compile(r'\bmsg\s*:\s*"([^"]*)"')
+
+
+def is_combined_detections_payload(data: Any) -> bool:
+    """Detects the ids.combined-detections export schema: a "rules" dict
+    (rule definitions) alongside a "packets" list (occurrences), as opposed
+    to this project's own flat alerts-list format."""
+    return (
+        isinstance(data, dict)
+        and isinstance(data.get("rules"), dict)
+        and isinstance(data.get("packets"), list)
+    )
+
+
+def _parse_combined_rule_key(key: str) -> Tuple[str, int, int, int] | None:
+    """(engine, gid, sid, rev) from a combined-schema rule key - seen in the
+    wild as 'snort:112:1' (gid:sid, Snort's built-in/preprocessor alerts)
+    and 'suricata:2001119' (a bare sid - Suricata rules have no meaningful
+    gid, so it defaults to 1, matching how intel_lookup.py's own
+    rule_details() treats them); also accepts 'snort_signature:1:31978:5'
+    (gid:sid:rev) in case a later export names rules that way instead. None
+    if `key` doesn't match any of these."""
+    m = _COMBINED_RULE_KEY_RE.match(key)
+    if not m:
+        return None
+    engine = m.group(1)
+    nums = [int(g) for g in (m.group(2), m.group(3), m.group(4)) if g is not None]
+    if len(nums) >= 3:
+        gid, sid, rev = nums[0], nums[1], nums[2]
+    elif len(nums) == 2:
+        gid, sid, rev = nums[0], nums[1], 0
+    else:
+        gid, sid, rev = 1, nums[0], 0
+    return engine, gid, sid, rev
+
+
+# IDS-Dashboard names its own severity/priority in words (Low, Medium, High,
+# Critical - confirmed against a real pulled file: Snort's "priority" and
+# Suricata's "severity" are both plain strings there, not numbers at all),
+# and reads the OPPOSITE direction from this project's own scale: this
+# project's LLM severity_rank has 1 = most severe, so "critical" maps to 1
+# here too, for the same direction - never show a bare "1" that would mean
+# something different (their own UI's "1" means low, not critical).
+_OTHER_SYSTEM_SEVERITY_RANK = {"critical": 1, "high": 2, "medium": 3, "low": 4}
+
+
+def _format_other_system_severity(raw: Any) -> Any:
+    """A recognized severity word -> "Label - N" using THIS project's own
+    numbering (critical=1 ... low=4), so a number shown anywhere always
+    means the same thing (1 = most severe) regardless of which pipeline the
+    alert came through. Anything else (already numeric, or an unrecognized
+    word) is returned unchanged - never an error, just no "- N" suffix."""
+    if isinstance(raw, str):
+        rank = _OTHER_SYSTEM_SEVERITY_RANK.get(raw.strip().lower())
+        if rank is not None:
+            return f"{raw.strip().title()} - {rank}"
+    return raw
+
+
+def extract_combined_detection_entries(data: Dict) -> List[Dict]:
+    """Normalizes an ids.combined-detections export's "rules" + "packets"
+    into this project's usual flat alert-entry shape - one entry per
+    (packet, engine, rule) match, the same granularity as one line in the
+    existing flat alert-list format."""
+    rules = data.get("rules", {}) or {}
+    packets = data.get("packets", []) or []
+    entries: List[Dict] = []
+
+    for packet in packets:
+        if not isinstance(packet, dict):
+            continue
+        packet_no = packet.get("packet")
+        timestamp = packet.get("time")
+        protocol = packet.get("protocol")
+        src_ip, _, src_port = str(packet.get("src", "") or "").partition(":")
+        dst_ip, _, dst_port = str(packet.get("dst", "") or "").partition(":")
+
+        for engine in ("snort", "suricata"):
+            for hit in packet.get(engine, []) or []:
+                if not isinstance(hit, dict):
+                    continue
+                for rule_key in hit.get("rules", []) or []:
+                    rule = rules.get(rule_key, {}) or {}
+                    parsed = _parse_combined_rule_key(rule_key)
+                    if parsed is None:
+                        continue
+                    parsed_engine, gid, sid, rev = parsed
+                    ids_output = rule.get("ids_output", {}) or {}
+                    rule_text = rule.get("rule_text", "") or ""
+                    if not rev and rule_text:
+                        rev_match = _REV_IN_RULE_TEXT_RE.search(rule_text)
+                        if rev_match:
+                            rev = int(rev_match.group(1))
+
+                    if parsed_engine == "suricata":
+                        alert_meta = ids_output.get("alert", {})
+                        alert_meta = alert_meta if isinstance(alert_meta, dict) else {}
+                        # Suricata's ids_output rarely carries the rule's own
+                        # short message - prefer parsing it from rule_text's
+                        # msg:"..." (the actual rule name) over falling all
+                        # the way to the long why_triggered paragraph.
+                        rule_msg_match = _MSG_IN_RULE_TEXT_RE.search(rule_text) if rule_text else None
+                        message = (
+                            alert_meta.get("signature")
+                            or (rule_msg_match.group(1) if rule_msg_match else None)
+                            or ids_output.get("msg")
+                            or rule.get("why_triggered", "")
+                        )
+                        classification = alert_meta.get("category", "")
+                        priority = _format_other_system_severity(alert_meta.get("severity"))
+                    else:
+                        message = ids_output.get("msg", "")
+                        classification = ids_output.get("class", "")
+                        priority = _format_other_system_severity(ids_output.get("priority"))
+
+                    alert_obj = {
+                        "timestamp": timestamp,
+                        "packet": packet_no,
+                        "alert_message": message,
+                        "classification": classification,
+                        "priority": priority,
+                        "protocol": protocol,
+                        "source_ip": src_ip or None,
+                        "source_port": int(src_port) if src_port.isdigit() else None,
+                        "destination_ip": dst_ip or None,
+                        "destination_port": int(dst_port) if dst_port.isdigit() else None,
+                        "engine": parsed_engine,
+                        "gid": gid,
+                        "sid": sid,
+                        "rev": rev,
+                        "rule_id": f"{gid}:{sid}:{rev}",
+                        # Given straight from the export, independent of the
+                        # intel.db lookup that rule_doc_section adds on top.
+                        "why_triggered": rule.get("why_triggered", ""),
+                        "rule_text": rule_text,
+                    }
+                    # alert_id = this packet's own id - same top-level
+                    # sibling-of-"alert" key the flat format already uses
+                    # (e.g. enriched_snort_alerts.json's {"alert_id": N,
+                    # "alert": {...}}), so "Alert <id>" labels throughout the
+                    # UI/reports show the packet number instead of "?".
+                    entries.append({"alert_id": packet_no, "alert": alert_obj})
+
+    return entries
+
+
 def is_snort_alerts_payload(data: Any) -> bool:
     """Detect a Snort alerts JSON without requiring any special prompt text."""
+    if is_combined_detections_payload(data):
+        return True
+
     if isinstance(data, dict) and isinstance(data.get("alerts"), list) and data["alerts"]:
         sample = data["alerts"][0]
         if isinstance(sample, dict):
@@ -505,6 +671,8 @@ def _normalize_entry(entry: Any) -> Dict:
 
 def extract_alert_entries(data: Any) -> List[Dict]:
     """Normalize any of the accepted shapes into a flat list of alert entries."""
+    if is_combined_detections_payload(data):
+        return extract_combined_detection_entries(data)
     if isinstance(data, dict) and isinstance(data.get("alerts"), list):
         return [_normalize_entry(e) for e in data["alerts"]]
     if isinstance(data, list):
