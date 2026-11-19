@@ -603,8 +603,9 @@ def build_alert_table(processed: List[Dict]) -> pd.DataFrame:
         rows.append(
             {
                 "Alert ID": item["alert_entry"].get("alert_id", "?"),
+                "Source": alert.get("engine", "snort").capitalize(),
                 "Alert Message": alert.get("alert_message", "(no message)"),
-                "Snort Priority": alert.get("priority", "?"),
+                "Actual Ranking": alert.get("priority", "?"),
                 "SID": alert.get("sid", "?"),
                 "Majority Rank": mode_rank(item["ranks"]),
                 "Ranks (3 runs)": ", ".join(str(r) for r in item["ranks"]),
@@ -1337,7 +1338,7 @@ def build_comparison_excel(entries: List[Dict], results: Dict[str, List[Dict]]) 
     ws = wb.active
     ws.title = "4-Model Comparison"
 
-    fixed_headers = ["Alert #", "Alert ID", "Alert Name", "Snort Priority"]
+    fixed_headers = ["Alert #", "Alert ID", "Source", "Alert Name", "Actual Ranking"]
     total_cols = len(fixed_headers) + len(RANKING_MODELS) * 2
     last_col = get_column_letter(total_cols)
 
@@ -1387,7 +1388,7 @@ def build_comparison_excel(entries: List[Dict], results: Dict[str, List[Dict]]) 
     for i in range(1, len(fixed_headers) + 1):
         ws.cell(row=4, column=i).fill = PatternFill("solid", fgColor="FFD9D9D9")
         ws.cell(row=4, column=i).border = border
-    col = len(fixed_headers) + 1
+    col = len(fixed_headers) + 1  # 6 - first model column, after the 5 fixed ones
     for _ in RANKING_MODELS:
         for label in ["Ranks (3 runs)", "Judge Score (avg)"]:
             cell = ws.cell(row=4, column=col, value=label)
@@ -1405,17 +1406,18 @@ def build_comparison_excel(entries: List[Dict], results: Dict[str, List[Dict]]) 
 
         ws.cell(row=row, column=1, value=idx + 1)
         ws.cell(row=row, column=2, value=base_item["alert_entry"].get("alert_id", "?"))
-        ws.cell(row=row, column=3, value=alert.get("alert_message", "(no message)"))
-        ws.cell(row=row, column=4, value=alert.get("priority", "?"))
-        for c in range(1, 5):
+        ws.cell(row=row, column=3, value=alert.get("engine", "snort").capitalize())
+        ws.cell(row=row, column=4, value=alert.get("alert_message", "(no message)"))
+        ws.cell(row=row, column=5, value=alert.get("priority", "?"))
+        for c in range(1, 6):
             cell = ws.cell(row=row, column=c)
             cell.font = Font(name="Arial", size=10)
             cell.alignment = Alignment(
-                horizontal="left" if c == 3 else "center", vertical="top", wrap_text=(c == 3)
+                horizontal="left" if c == 4 else "center", vertical="top", wrap_text=(c == 4)
             )
             cell.border = border
 
-        col = 5
+        col = 6
         for model in RANKING_MODELS:
             item = results[model][idx]
             judge_scores = [r.get("judge_score") for r in item["runs"] if r.get("judge_score") is not None]
@@ -1432,9 +1434,10 @@ def build_comparison_excel(entries: List[Dict], results: Dict[str, List[Dict]]) 
 
     ws.column_dimensions["A"].width = 8
     ws.column_dimensions["B"].width = 10
-    ws.column_dimensions["C"].width = 45
-    ws.column_dimensions["D"].width = 12
-    for i in range(5, total_cols + 1):
+    ws.column_dimensions["C"].width = 10
+    ws.column_dimensions["D"].width = 45
+    ws.column_dimensions["E"].width = 14
+    for i in range(6, total_cols + 1):
         ws.column_dimensions[get_column_letter(i)].width = 16
 
     summary_title_row = row + 1
@@ -1599,8 +1602,9 @@ def render_comparison_tab(entries: List[Dict], rag_system, fhash: str, chat_slot
             alert = base_item["alert_entry"].get("alert", {}) or {}
             row = {
                 "Alert ID": base_item["alert_entry"].get("alert_id", "?"),
+                "Source": alert.get("engine", "snort").capitalize(),
                 "Alert Message": alert.get("alert_message", "(no message)"),
-                "Snort Priority": alert.get("priority", "?"),
+                "Actual Ranking": alert.get("priority", "?"),
                 "SID": alert.get("sid", "?"),
             }
             for model in RANKING_MODELS:
