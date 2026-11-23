@@ -168,7 +168,7 @@ def get_rule_doc_block_for_alert(alert_entry: Dict) -> Tuple[str, str]:
     source has this sid."""
     sid = resolve_ground_truth_sid(alert_entry)
     alert = alert_entry.get("alert", {}) or {}
-    intel_text = get_intel_db_doc_block(alert.get("gid"), sid, alert.get("rev"))
+    intel_text = get_intel_db_doc_block(alert.get("gid"), sid, alert.get("rev"), alert.get("engine", "snort"))
     if intel_text:
         return intel_text, "intel.db"
     local_text = get_rule_doc_block(sid)
