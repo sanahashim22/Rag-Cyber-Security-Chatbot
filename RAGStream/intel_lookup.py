@@ -12,7 +12,12 @@ finds those and reads what the database holds on them:
 
 - a Snort rule: Talos's documentation of it (category, explanation, what to
   look for, false positives, known usage, vulnerability type), or for a
-  built-in rule (GID 2 and up) Snort's own description of it;
+  built-in rule (GID 2 and up) Snort's own description of it and the part
+  of Snort that raises it (its packet decoder or an inspector);
+- a Suricata rule: the rule's own documentation, since ET Open has no
+  pages like Talos's (its ruleset and category, what its class means,
+  confidence, severity, when it was written and updated, references, CVEs
+  and ATT&CK IDs);
 - a CVE: the NVD summary, publication date, CVSS, CWEs, EPSS and, when it is
   in CISA's Known Exploited Vulnerabilities catalog, its KEV entry;
 - a technique: its name, tactics, platforms and description.
@@ -23,6 +28,11 @@ packages) and run it there:
     python intel_lookup.py download http://172.16.20.142:8501/
     python intel_lookup.py enrich snort_suricata_combined_20261117_1651_last20.json
     python intel_lookup.py lookup snort_signature:1:31978:5 CVE-2014-6271 T1190
+    python intel_lookup.py lookup 2009208 116:414
+
+A rule can be named in full (``suricata_signature:1:2009208:4``) or by
+GID:SID:REV, GID:SID or SID alone: each rule of either engine with that
+SID is given.
 
 ``download`` saves the dashboard's intel.db (about 1.4 GB; the IDS machine
 refreshes it) next to this script, or at --db; it is written under a
@@ -36,7 +46,10 @@ NOTE: this file is copied verbatim from the IDS-Dashboard repo's
 scripts/intel_lookup.py, per that project's own instructions for the "LLM
 PC" side of the integration - see dashboard_app.py / snort_ranking.py for
 how this project calls into it (lookup() + as_text(), by gid/sid/rev, not
-the CLI). Re-copy it from there if their schema ever changes.
+the CLI). Re-copy it from there if their schema ever changes (this copy was
+refreshed on 2026-11-23 to add suricata_rule_docs/snort_builtin_rules
+support - sids like Suricata's ET rules were returning no documentation at
+all under the previous copy, even though intel.db already had it).
 """
 
 from __future__ import annotations
@@ -59,6 +72,8 @@ _CVE_RE = re.compile(r"\bCVE[-_](\d{4})[-_](\d{4,7})\b", re.IGNORECASE)
 _CVE_REFERENCE_RE = re.compile(r"reference\s*:\s*cve\s*,\s*(\d{4})-(\d{4,7})", re.IGNORECASE)
 _TECHNIQUE_RE = re.compile(r"\bT\d{4}(?:\.\d{3})?\b")
 _RULE_RE = re.compile(r"\b(snort|suricata)_signature:(\d+):(\d+):(\d+)\b")
+# 2009208, 116:414, 1:2009208:4.
+_PLAIN_RULE_RE = re.compile(r"(?:(\d+):)?(\d+)(?::(\d+))?")
 # Talos's explanation: a description, then these sections.
 _TALOS_SECTION_RE = re.compile(r"(?:^|\n)[ \t]*(Impact|Details|Ease of Attack):[ \t]*")
 # ATT&CK's citations and Markdown links.
@@ -102,23 +117,110 @@ def _has_table(connection: sqlite3.Connection, name: str) -> bool:
     ).fetchone() is not None
 
 
+def _row(connection: sqlite3.Connection, table: str, gid: int, sid: int) -> sqlite3.Row | None:
+    if not _has_table(connection, table):
+        return None
+    return connection.execute(f"SELECT * FROM {table} WHERE gid = ? AND sid = ?", (gid, sid)).fetchone()
+
+
+def _words(value: Any) -> str:
+    """A metadata value as words: Client_Endpoint is Client Endpoint."""
+    return _one_line(str(value or "").replace("_", " "))
+
+
+def _raised_by(module: str, kind: str, about: str) -> str:
+    """Which part of Snort raises a built-in rule, and what that means."""
+    about = f" ({about})" if about else ""
+    if kind == "codec" or module == "decode":
+        return (
+            f"Snort's packet decoder, {module}{about}, while reading the packet's headers: the packet "
+            "is unusual or malformed for that protocol. This is a check on the packet's form, not a "
+            "signature of a known attack, and it names no CVE."
+        )
+    if kind.startswith("inspector"):
+        return (
+            f"Snort's {module} inspector{about}: something that inspector watches for in the protocol "
+            "or the traffic's behaviour, not a match of a written attack signature. It names no CVE."
+        )
+    return f"Snort's {module} module{about}."
+
+
+def _builtin_details(connection: sqlite3.Connection, gid: int, sid: int) -> dict[str, Any] | None:
+    """Snort's own description of a built-in rule and the module that raises it."""
+    described = _row(connection, "snort_builtin_docs", gid, sid)
+    listed = _row(connection, "snort_builtin_rules", gid, sid)
+    if described is None and listed is None:
+        return None
+    details: dict[str, Any] = {"description": described["description"] if described else None}
+    if listed is not None:
+        details.update({
+            "message": listed["msg"],
+            "module": listed["module"],
+            "module_help": listed["module_help"],
+            "raised_by": _raised_by(
+                str(listed["module"] or ""), str(listed["module_type"] or ""), _one_line(listed["module_help"]),
+            ),
+        })
+    return {"snort_documentation": _without_empty(details)}
+
+
+def _suricata_details(connection: sqlite3.Connection, gid: int, sid: int, rev: int | None) -> dict[str, Any] | None:
+    """The documentation a Suricata rule carries itself."""
+    row = _row(connection, "suricata_rule_docs", gid, sid)
+    if row is None:
+        return None
+    metadata = _json(row["metadata_json"], {})
+    references = []
+    for reference in _json(row["references_json"], []):
+        kind, _, value = str(reference).partition(",")
+        if kind.lower() != "cve":  # the CVEs are given below
+            references.append(value.strip() if kind.lower() == "url" else f"{kind} {value.strip()}")
+    return _without_empty({"suricata_rule": {
+        "ruleset": row["ruleset"],
+        "message": row["msg"],
+        "category": row["category"],
+        "class": {
+            "name": row["classtype"], "description": row["class_description"], "priority": row["priority"],
+        } if row["classtype"] else None,
+        "confidence": _words(row["confidence"]),
+        "signature_severity": _words(row["signature_severity"]),
+        "created": row["created_at"],
+        "updated": row["updated_at"],
+        "rev_in_database": row["rev"] if rev is not None and row["rev"] is not None and row["rev"] != rev else None,
+        **{
+            key: ", ".join(_words(value) for value in metadata.get(key, []))
+            for key in ("attack_target", "deployment", "affected_product", "malware_family", "tag", "former_category")
+        },
+        "references": references,
+        "cves": [cve.strip() for cve in str(row["cve_ids"] or "").split(",") if cve.strip()],
+        "attack_tactics": [
+            f"{tactic_id} {_words(name)}".strip()
+            for tactic_id, name in zip(
+                metadata.get("mitre_tactic_id", []),
+                metadata.get("mitre_tactic_name", []) + [""] * len(metadata.get("mitre_tactic_id", [])),
+            )
+        ],
+        "attack_techniques": [
+            technique.strip() for technique in str(row["mitre_technique_id"] or "").split(",") if technique.strip()
+        ],
+    }})
+
+
 def rule_details(connection: sqlite3.Connection, rule: str) -> dict[str, Any] | None:
     """Talos's documentation of a Snort rule, or Snort's own description of
-    a built-in rule Talos doesn't document; None for a Suricata rule (ET
-    Open has none) or a rule neither documents."""
+    a built-in rule Talos doesn't document, or a Suricata rule's own
+    documentation; None for a rule the database doesn't hold."""
     match = _RULE_RE.fullmatch(rule)
-    if not match or match.group(1) != "snort":
+    if not match:
         return None
-    gid, sid = int(match.group(2)), int(match.group(3))
-    row = connection.execute(
-        "SELECT * FROM talos_rule_docs WHERE gid = ? AND sid = ?", (gid, sid),
-    ).fetchone() if _has_table(connection, "talos_rule_docs") else None
+    gid, sid, rev = int(match.group(2)), int(match.group(3)), int(match.group(4))
+    if match.group(1) == "suricata":
+        return _suricata_details(connection, gid, sid, rev)
+    row = _row(connection, "talos_rule_docs", gid, sid)
     if row is None or not _one_line(row["explanation"]) or gid > 3:
-        builtin = connection.execute(
-            "SELECT description FROM snort_builtin_docs WHERE gid = ? AND sid = ?", (gid, sid),
-        ).fetchone() if _has_table(connection, "snort_builtin_docs") else None
+        builtin = _builtin_details(connection, gid, sid)
         if builtin is not None:
-            return {"snort_documentation": {"description": builtin["description"]}}
+            return builtin
     if row is None:
         return None
     pieces = _TALOS_SECTION_RE.split(str(row["explanation"] or ""))
@@ -208,6 +310,34 @@ def technique_details(connection: sqlite3.Connection, technique: str) -> dict[st
     })
 
 
+def rules_named(connection: sqlite3.Connection, given: str) -> list[str]:
+    """The full names of the rules a plain ID (SID, GID:SID or GID:SID:REV)
+    names, of either engine, that the database holds."""
+    match = _PLAIN_RULE_RE.fullmatch(given)
+    if not match:
+        return []
+    gid = int(match.group(1)) if match.group(1) else None
+    sid = int(match.group(2))
+    rev = int(match.group(3)) if match.group(3) else None
+    names: dict[str, None] = {}
+    for engine, table in (
+        ("snort", "talos_rule_docs"), ("snort", "snort_builtin_rules"), ("snort", "snort_builtin_docs"),
+        ("suricata", "suricata_rule_docs"),
+    ):
+        if not _has_table(connection, table):
+            continue
+        has_rev = table in ("talos_rule_docs", "suricata_rule_docs")
+        query = f"SELECT gid, sid{', rev' if has_rev else ''} FROM {table} WHERE sid = ?"
+        values: list[Any] = [sid]
+        if gid is not None:
+            query += " AND gid = ?"
+            values.append(gid)
+        for row in connection.execute(query + " ORDER BY gid", values):
+            found_rev = rev or (row["rev"] if has_rev and row["rev"] else 1)
+            names[f"{engine}_signature:{row['gid']}:{row['sid']}:{found_rev}"] = None
+    return list(names)
+
+
 def lookup(db: Path, ids: Iterable[str]) -> dict[str, Any]:
     """What the database holds on each rule name, CVE and technique ID. The
     CVEs and techniques a rule's Talos documentation names are looked up too."""
@@ -221,14 +351,19 @@ def lookup(db: Path, ids: Iterable[str]) -> dict[str, Any]:
         cves: list[str] = []
         techniques: list[str] = []
         for given in wanted:
-            if _RULE_RE.fullmatch(given):
-                details = rule_details(connection, given)
-                if details is None:
-                    continue
-                found["rules"][given] = details
-                talos = details.get("talos_documentation", {})
-                cves += talos.get("cves", [])
-                techniques += talos.get("attack_techniques", [])
+            plain = _PLAIN_RULE_RE.fullmatch(given) is not None
+            if plain or _RULE_RE.fullmatch(given):
+                names = rules_named(connection, given) if plain else [given]
+                if plain and not names:
+                    found["unknown"].append(given)
+                for name in names:
+                    details = rule_details(connection, name)
+                    if details is None:
+                        continue
+                    found["rules"][name] = details
+                    documented = details.get("talos_documentation") or details.get("suricata_rule") or {}
+                    cves += documented.get("cves", [])
+                    techniques += documented.get("attack_techniques", [])
             elif given.upper().replace("_", "-").startswith("CVE-"):
                 cves.append(given.upper().replace("_", "-"))
             else:
@@ -266,6 +401,8 @@ _SOURCE_NAMES = {
     "nvd": "NVD", "epss": "EPSS", "cisa_kev": "CISA KEV", "mitre_attack": "MITRE ATT&CK",
     "talos_rule_docs": "Talos rule documentation",
     "snort_builtin_docs": "Snort built-in rule descriptions",
+    "snort_builtin_rules": "Snort built-in rules",
+    "suricata_rule_docs": "Suricata rules",
 }
 
 
@@ -282,8 +419,59 @@ def as_text(found: Mapping[str, Any]) -> str:
     categories: set[str] = set()
     for rule, details in found.get("rules", {}).items():
         if "snort_documentation" in details:
-            lines += ["", f"Rule {rule}: Snort's description of this built-in rule",
-                      f"  Description: {details['snort_documentation']['description']}"]
+            snort = details["snort_documentation"]
+            lines += ["", f"Rule {rule}: Snort's description of this built-in rule"]
+            if snort.get("message") and _one_line(snort["message"]).lower() != _one_line(snort.get("description")).lower():
+                lines.append(f"  Message: {snort['message']}")
+            if snort.get("description"):
+                lines.append(f"  Description: {snort['description']}")
+            if snort.get("raised_by"):
+                lines.append(f"  Raised by: {snort['raised_by']}")
+            continue
+        if "suricata_rule" in details:
+            rule_docs = details["suricata_rule"]
+            lines += ["", f"Rule {rule}: the rule's own documentation ({rule_docs.get('ruleset', 'Suricata')})"]
+            for key, label in (("message", "Message"), ("category", "Category")):
+                if rule_docs.get(key):
+                    lines.append(f"  {label}: {rule_docs[key]}")
+            if rule_docs.get("class"):
+                kind = rule_docs["class"]
+                lines.append(
+                    f"  Class: {kind.get('name')}"
+                    + (f", {kind['description']}" if kind.get("description") else "")
+                    + (f" (priority {kind['priority']})" if kind.get("priority") else "")
+                )
+            judged = [
+                f"{label} {rule_docs[key]}" for key, label in (
+                    ("confidence", "confidence"), ("signature_severity", "signature severity"),
+                ) if rule_docs.get(key)
+            ]
+            if judged:
+                lines.append(f"  The rule's writers give it: {', '.join(judged)}")
+            if rule_docs.get("created") or rule_docs.get("updated"):
+                lines.append(
+                    "  " + ", ".join(part for part in (
+                        f"written {rule_docs['created']}" if rule_docs.get("created") else "",
+                        f"last updated {rule_docs['updated']}" if rule_docs.get("updated") else "",
+                    ) if part).capitalize()
+                )
+            if rule_docs.get("rev_in_database"):
+                lines.append(f"  Revision in the database: {rule_docs['rev_in_database']}")
+            for key, label in (
+                ("attack_target", "Attack target"), ("deployment", "Deployment"),
+                ("affected_product", "Affected product"), ("malware_family", "Malware family"),
+                ("tag", "Tags"), ("former_category", "Former category"),
+            ):
+                if rule_docs.get(key):
+                    lines.append(f"  {label}: {rule_docs[key]}")
+            if rule_docs.get("references"):
+                lines.append(f"  References: {', '.join(rule_docs['references'])}")
+            if rule_docs.get("cves"):
+                lines.append(f"  CVEs: {', '.join(rule_docs['cves'])}")
+            if rule_docs.get("attack_tactics"):
+                lines.append(f"  ATT&CK tactic: {', '.join(rule_docs['attack_tactics'])}")
+            if rule_docs.get("attack_techniques"):
+                lines.append(f"  ATT&CK technique: {', '.join(rule_docs['attack_techniques'])}")
             continue
         talos = dict(details["talos_documentation"])
         lines += ["", f"Rule {rule}: Talos documentation"]
