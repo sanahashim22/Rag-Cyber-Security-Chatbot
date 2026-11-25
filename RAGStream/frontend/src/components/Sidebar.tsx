@@ -3,17 +3,13 @@ import { SeverityLegend } from './Common'
 
 export function Sidebar({ meta }: { meta: MetaInfo | undefined }) {
   if (!meta) {
-    return (
-      <div className="app-sidebar">
-        <div className="info-card">Loading…</div>
-      </div>
-    )
+    return <div className="info-card">Loading…</div>
   }
 
   const badge = meta.ollama_is_local ? '🖥️ Local (CPU)' : '🌐 Remote (GPU test)'
 
   return (
-    <div className="app-sidebar">
+    <>
       <div className="info-card">
         <div className="info-card-title">⚙️ Ollama target</div>
         <p style={{ margin: 0 }}>
@@ -47,6 +43,6 @@ export function Sidebar({ meta }: { meta: MetaInfo | undefined }) {
         <div className="info-card-title">🎯 Severity scale</div>
         <SeverityLegend meanings={meta.severity_meanings} />
       </div>
-    </div>
+    </>
   )
 }

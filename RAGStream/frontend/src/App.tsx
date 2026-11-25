@@ -17,6 +17,7 @@ export default function App() {
   const { data: modelsInfo } = useQuery({ queryKey: ['models'], queryFn: api.models })
   const { data: scan } = useQuery({ queryKey: ['alerts-scan'], queryFn: api.scanAlerts, refetchInterval: 4000 })
 
+  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [idsBaseUrl, setIdsBaseUrl] = useState('http://172.16.20.142:8501')
   const [idsToken, setIdsToken] = useState('')
   const [fileChoice, setFileChoice] = useState(ALL_FILES_CHOICE)
@@ -53,6 +54,17 @@ export default function App() {
     )
   }
 
+  const sidebarToggle = (
+    <button
+      className="sidebar-toggle"
+      onClick={() => setSidebarOpen((v) => !v)}
+      title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+      type="button"
+    >
+      {sidebarOpen ? '◀' : '▶'}
+    </button>
+  )
+
   const autoRunLimit = modelsInfo.auto_run_limit
   const totalInFile =
     fileChoice === ALL_FILES_CHOICE
@@ -67,7 +79,10 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar meta={meta} />
+      <div className={`app-sidebar ${sidebarOpen ? '' : 'collapsed'}`}>
+        <Sidebar meta={meta} />
+      </div>
+      {sidebarToggle}
       <div className="app-main">
         <Header />
 
