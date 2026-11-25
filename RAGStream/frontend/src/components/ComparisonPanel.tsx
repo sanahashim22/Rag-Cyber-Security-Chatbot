@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { api, downloadBase64 } from '../api/client'
 import type { AlertEntry } from '../api/types'
-import { Callout, Tabs, severityRankColor } from './Common'
+import { Callout, ProgressBar, Tabs, severityRankColor } from './Common'
 import { ReasoningView, ReportView, TimingView } from './RankingShared'
 
 export function ComparisonPanel({
@@ -84,15 +84,19 @@ export function ComparisonPanel({
         </p>
       </div>
 
-      {job?.status === 'running' && <Callout kind="info">⏳ {job.progress.message}</Callout>}
+      {job?.status === 'running' && (
+        <ProgressBar current={job.progress.current} total={job.progress.total} label={`⏳ ${job.progress.message}`} />
+      )}
       {job?.status === 'error' && <Callout kind="error">{job.error}</Callout>}
 
       {!result ? (
-        <Callout kind="info">
-          Click <b>Run all 4 models</b> to rank every alert with all 4 models ({repeats} run(s) each) and compare
-          them side by side. This runs {models.length * repeats} full pass(es) per alert, so it takes roughly 4x
-          longer than the single-model tab.
-        </Callout>
+        job?.status !== 'running' && (
+          <Callout kind="info">
+            Click <b>Run all 4 models</b> to rank every alert with all 4 models ({repeats} run(s) each) and compare
+            them side by side. This runs {models.length * repeats} full pass(es) per alert, so it takes roughly 4x
+            longer than the single-model tab.
+          </Callout>
+        )
       ) : (
         <>
           <Tabs

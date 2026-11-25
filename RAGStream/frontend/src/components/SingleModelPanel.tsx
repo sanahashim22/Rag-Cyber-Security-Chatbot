@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { AlertEntry, MetaInfo } from '../api/types'
-import { Callout, Tabs } from './Common'
+import { Callout, ProgressBar, Tabs } from './Common'
 import { RankingOverview, ReasoningView, ReportView, TimingView } from './RankingShared'
 
 export function SingleModelPanel({
@@ -106,11 +106,15 @@ export function SingleModelPanel({
         </p>
       </div>
 
-      {job?.status === 'running' && <Callout kind="info">⏳ {job.progress.message}</Callout>}
+      {job?.status === 'running' && (
+        <ProgressBar current={job.progress.current} total={job.progress.total} label={`⏳ ${job.progress.message}`} />
+      )}
       {job?.status === 'error' && <Callout kind="error">{job.error}</Callout>}
 
       {!result ? (
-        <Callout kind="info">Select a model and click <b>Run ranking</b> to rank these alerts.</Callout>
+        job?.status !== 'running' && (
+          <Callout kind="info">Select a model and click <b>Run ranking</b> to rank these alerts.</Callout>
+        )
       ) : (
         <>
           <Tabs

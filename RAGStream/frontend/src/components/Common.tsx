@@ -37,6 +37,20 @@ export function Callout({ kind, children }: { kind: 'info' | 'warn' | 'error' | 
   return <div className={`callout callout-${kind}`}>{children}</div>
 }
 
+export function ProgressBar({ current, total, label }: { current: number; total: number; label: string }) {
+  const pct = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0
+  return (
+    <div className="progress-wrap">
+      <div className="progress-track">
+        <div className="progress-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <p className="small-muted" style={{ marginTop: 6 }}>
+        {label}
+      </p>
+    </div>
+  )
+}
+
 export function Expander({ title, children, defaultOpen = false }: { title: React.ReactNode; children: React.ReactNode; defaultOpen?: boolean }) {
   return (
     <details className="expander" open={defaultOpen}>
