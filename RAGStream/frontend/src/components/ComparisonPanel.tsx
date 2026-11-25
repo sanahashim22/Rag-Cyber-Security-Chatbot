@@ -42,13 +42,13 @@ export function ComparisonPanel({
 
   return (
     <div>
-      <div style={{ marginBottom: 10 }}>
+      <div style={{ marginBottom: 22 }}>
         <button className="btn-primary" onClick={() => start.mutate()} disabled={job?.status === 'running' || start.isPending}>
           ▶ Run all 4 models
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 14 }}>
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 24 }}>
         <label className="checkbox-row">
           <input type="checkbox" checked={runJudge} onChange={(e) => setRunJudge(e.target.checked)} /> Judge LLM
         </label>

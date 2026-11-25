@@ -273,7 +273,7 @@ select option { padding: 8px 10px; }
 
 .field-label {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   font-size: 14px;
   font-weight: 600;
   color: var(--text);

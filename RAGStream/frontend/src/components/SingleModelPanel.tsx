@@ -52,7 +52,7 @@ export function SingleModelPanel({
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 10 }}>
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 22 }}>
         <label>
           <span className="field-label">Ranking model</span>
           <select value={model} onChange={(e) => setModel(e.target.value)}>
@@ -68,7 +68,7 @@ export function SingleModelPanel({
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 14 }}>
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 24 }}>
         <label className="checkbox-row">
           <input type="checkbox" checked={runJudge} onChange={(e) => setRunJudge(e.target.checked)} /> Judge LLM
         </label>
