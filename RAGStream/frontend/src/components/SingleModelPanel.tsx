@@ -54,8 +54,7 @@ export function SingleModelPanel({
     <div>
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 10 }}>
         <label>
-          Ranking model
-          <br />
+          <span className="field-label">Ranking model</span>
           <select value={model} onChange={(e) => setModel(e.target.value)}>
             {models.map((m) => (
               <option key={m} value={m}>

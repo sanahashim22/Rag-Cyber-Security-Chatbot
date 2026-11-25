@@ -16,8 +16,7 @@ export function FileDropdown({
 }) {
   return (
     <label>
-      📄 Which file do you want to rank?
-      <br />
+      <span className="field-label">📄 Which file do you want to rank?</span>
       <select value={value} onChange={(e) => onChange(e.target.value)} style={{ minWidth: 320 }}>
         <option value={ALL_FILES_CHOICE}>{ALL_FILES_CHOICE}</option>
         {scan.file_summaries.map((f) => (

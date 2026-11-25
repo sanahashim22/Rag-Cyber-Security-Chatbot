@@ -47,13 +47,11 @@ export function ReceiveFromIdsDashboard({
       </p>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
         <label>
-          IDS-Dashboard base URL
-          <br />
+          <span className="field-label">IDS-Dashboard base URL</span>
           <input type="text" value={baseUrl} onChange={(e) => onChange(e.target.value, token)} style={{ width: 280 }} />
         </label>
         <label>
-          IDS_API_TOKEN
-          <br />
+          <span className="field-label">IDS_API_TOKEN</span>
           <input type="password" value={token} onChange={(e) => onChange(baseUrl, e.target.value)} style={{ width: 200 }} />
         </label>
       </div>

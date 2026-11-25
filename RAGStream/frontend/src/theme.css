@@ -267,6 +267,17 @@ select, input[type="text"], input[type="password"], input[type="number"] {
   padding: 10px 12px;
   font-size: 14.5px;
 }
+/* Chromium/Edge honor padding on <option>; other browsers ignore it
+   harmlessly, so this is a free improvement where it's supported. */
+select option { padding: 8px 10px; }
+
+.field-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
 
 .control-row { display: flex; gap: 18px; align-items: flex-end; flex-wrap: wrap; }
 .checkbox-row { display: flex; align-items: center; gap: 9px; font-size: 14.5px; }
