@@ -77,10 +77,11 @@ export function formatPKT(iso: string | null | undefined): string {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    hourCycle: 'h12',
   }).formatToParts(d)
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
-  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')} PKT`
+  const ampm = get('dayPeriod').toUpperCase().replace(/\./g, '')
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')} ${ampm} PKT`
 }
 
 export function formatDuration(seconds: number | null | undefined): string {
