@@ -14,9 +14,9 @@ export function ComparisonPanel({
   models: string[]
   onBusyChange: (busy: boolean) => void
 }) {
-  const [runJudge, setRunJudge] = useState(true)
-  const [runMismatch, setRunMismatch] = useState(true)
-  const [runCorrelation, setRunCorrelation] = useState(true)
+  const [runJudge, setRunJudge] = useState(false)
+  const [runMismatch, setRunMismatch] = useState(false)
+  const [runCorrelation, setRunCorrelation] = useState(false)
   const [jobId, setJobId] = useState<string | null>(null)
   const [tab, setTab] = useState('ranking')
   const [activeModel, setActiveModel] = useState(models[0])
