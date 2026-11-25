@@ -26,38 +26,40 @@ export function modeRank(ranks: number[]): number {
 
 export function AlertTable({ rows }: { rows: AlertTableRow[] }) {
   return (
-    <table className="data-table">
-      <thead>
-        <tr>
-          <th>Alert ID</th>
-          <th>Source</th>
-          <th>Alert Message</th>
-          <th>Actual Ranking</th>
-          <th>SID</th>
-          <th>Majority Rank</th>
-          <th>Ranks (3 runs)</th>
-          <th>Consistent</th>
-          <th>Avg Judge Score</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r, i) => (
-          <tr key={i}>
-            <td>{r.alert_id}</td>
-            <td>{r.source}</td>
-            <td>{r.alert_message}</td>
-            <td>{r.actual_ranking}</td>
-            <td>{r.sid}</td>
-            <td style={{ background: severityRankColor(r.majority_rank) + '33', fontWeight: 700 }}>
-              {r.majority_rank}
-            </td>
-            <td>{r.ranks.join(', ')}</td>
-            <td>{r.consistent ? '✅ Yes' : '❌ No'}</td>
-            <td>{r.avg_judge_score ?? '-'}</td>
+    <div className="table-scroll">
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Alert ID</th>
+            <th>Source</th>
+            <th>Alert Message</th>
+            <th>Actual Ranking</th>
+            <th>SID</th>
+            <th>Majority Rank</th>
+            <th>Ranks (3 runs)</th>
+            <th>Consistent</th>
+            <th>Avg Judge Score</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i}>
+              <td>{r.alert_id}</td>
+              <td>{r.source}</td>
+              <td style={{ minWidth: 240 }}>{r.alert_message}</td>
+              <td>{r.actual_ranking}</td>
+              <td>{r.sid}</td>
+              <td style={{ background: severityRankColor(r.majority_rank) + '26', fontWeight: 700 }}>
+                {r.majority_rank}
+              </td>
+              <td>{r.ranks.join(', ')}</td>
+              <td>{r.consistent ? '✅ Yes' : '❌ No'}</td>
+              <td>{r.avg_judge_score ?? '-'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
 
@@ -75,28 +77,30 @@ export function CorrelationSection({ correlation }: { correlation: CorrelationRe
       {groups.length === 0 ? (
         <Callout kind="info">No correlated alert groups found in this batch.</Callout>
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Status</th>
-              <th>Alert IDs</th>
-              <th>Combined Rank</th>
-              <th style={{ width: '45%' }}>Combined Event</th>
-            </tr>
-          </thead>
-          <tbody>
-            {groups.map((g, i) => (
-              <tr key={i}>
-                <td>🔗 AI-suggested</td>
-                <td>{g.alert_ids.join(', ')}</td>
-                <td style={{ background: severityRankColor(g.combined_rank ?? undefined) + '33', fontWeight: 700 }}>
-                  {g.combined_rank ?? '-'}
-                </td>
-                <td>{g.event_description}</td>
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Alert IDs</th>
+                <th>Combined Rank</th>
+                <th style={{ width: '45%' }}>Combined Event</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {groups.map((g, i) => (
+                <tr key={i}>
+                  <td>🔗 AI-suggested</td>
+                  <td>{g.alert_ids.join(', ')}</td>
+                  <td style={{ background: severityRankColor(g.combined_rank ?? undefined) + '26', fontWeight: 700 }}>
+                    {g.combined_rank ?? '-'}
+                  </td>
+                  <td>{g.event_description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   )

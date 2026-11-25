@@ -85,68 +85,76 @@ export function ComparisonPanel({
 
           {tab === 'ranking' && (
             <>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Model</th>
-                    <th>Consistency (3/3)</th>
-                    <th>Avg Judge Score</th>
-                    <th>Rank 1</th>
-                    <th>Rank 2</th>
-                    <th>Rank 3</th>
-                    <th>Rank 4</th>
-                    <th>Rank 5</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.model_summary.map((s) => (
-                    <tr key={s.model}>
-                      <td>{s.model}</td>
-                      <td>
-                        {s.consistent_count}/{s.total_alerts}
-                      </td>
-                      <td>{s.avg_judge != null ? s.avg_judge.toFixed(3) : '-'}</td>
-                      {s.rank_counts.map((c, i) => (
-                        <td key={i}>{c}</td>
+              <div className="table-scroll">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Model</th>
+                      <th>Consistency (3/3)</th>
+                      <th>Avg Judge Score</th>
+                      <th>Rank 1</th>
+                      <th>Rank 2</th>
+                      <th>Rank 3</th>
+                      <th>Rank 4</th>
+                      <th>Rank 5</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.model_summary.map((s) => (
+                      <tr key={s.model}>
+                        <td>{s.model}</td>
+                        <td>
+                          {s.consistent_count}/{s.total_alerts}
+                        </td>
+                        <td>{s.avg_judge != null ? s.avg_judge.toFixed(3) : '-'}</td>
+                        {s.rank_counts.map((c, i) => (
+                          <td key={i}>{c}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="table-scroll">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Alert ID</th>
+                      <th>Source</th>
+                      <th>Alert Message</th>
+                      <th>Actual Ranking</th>
+                      <th>SID</th>
+                      {models.map((m) => (
+                        <th key={m}>{m}</th>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              <table className="data-table" style={{ marginTop: 16 }}>
-                <thead>
-                  <tr>
-                    <th>Alert ID</th>
-                    <th>Source</th>
-                    <th>Alert Message</th>
-                    <th>Actual Ranking</th>
-                    <th>SID</th>
-                    {models.map((m) => (
-                      <th key={m}>{m}</th>
+                  </thead>
+                  <tbody>
+                    {result.comparison_rows.map((row, i) => (
+                      <tr key={i}>
+                        <td>{row.alert_id}</td>
+                        <td>{row.source}</td>
+                        <td style={{ minWidth: 220 }}>{row.alert_message}</td>
+                        <td>{row.actual_ranking}</td>
+                        <td>{row.sid}</td>
+                        {models.map((m) => {
+                          const mr = row.models[m]
+                          return (
+                            <td key={m} style={{ background: severityRankColor(mr.majority_rank) + '26', minWidth: 130 }}>
+                              <div className="model-cell">
+                                <span className="rank-badge">{mr.majority_rank}</span>
+                                <span className="model-detail">runs {mr.ranks.join(', ')}</span>
+                                <span className="model-detail">judge {mr.avg_judge_score ?? '-'}</span>
+                              </div>
+                            </td>
+                          )
+                        })}
+                      </tr>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.comparison_rows.map((row, i) => (
-                    <tr key={i}>
-                      <td>{row.alert_id}</td>
-                      <td>{row.source}</td>
-                      <td>{row.alert_message}</td>
-                      <td>{row.actual_ranking}</td>
-                      <td>{row.sid}</td>
-                      {models.map((m) => {
-                        const mr = row.models[m]
-                        return (
-                          <td key={m} style={{ background: severityRankColor(mr.majority_rank) + '33' }}>
-                            <b>{mr.majority_rank}</b> ({mr.ranks.join(',')}) · judge {mr.avg_judge_score ?? '-'}
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </tbody>
+                </table>
+              </div>
 
               <div style={{ marginTop: 12 }}>
                 <button
