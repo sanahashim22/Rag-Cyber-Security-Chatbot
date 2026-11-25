@@ -1,6 +1,14 @@
 import ReactMarkdown from 'react-markdown'
 import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from 'recharts'
-import type { AggregateStats, AlertTableRow, CorrelationResult, ProcessedAlert, RunDetail } from '../api/types'
+import type {
+  AggregateStats,
+  AlertTableRow,
+  CorrelationResult,
+  ProcessedAlert,
+  RunDetail,
+  TimingAttempt,
+  TimingStage,
+} from '../api/types'
 import { SEVERITY_COLORS, SEVERITY_ICONS } from '../constants'
 import { downloadBlob } from '../api/client'
 import { Callout, Expander, MetricCard, MetricGrid, SectionLabel, RuleCard, formatDuration, severityRankColor } from './Common'
@@ -132,13 +140,15 @@ export function RankingOverview({
       </MetricGrid>
 
       <SectionLabel>Severity rank distribution (all runs)</SectionLabel>
-      <BarChart width={600} height={240} data={distData}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#27354a" />
-        <XAxis dataKey="rank" stroke="#8b949e" />
-        <YAxis stroke="#8b949e" allowDecimals={false} />
-        <Tooltip contentStyle={{ background: '#111826', border: '1px solid #27354a' }} />
-        <Bar dataKey="count" fill={SEVERITY_COLORS[1]} name="# judgments" />
-      </BarChart>
+      <div className="chart-box">
+        <BarChart width={600} height={240} data={distData}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#27354a" />
+          <XAxis dataKey="rank" stroke="#8b949e" />
+          <YAxis stroke="#8b949e" allowDecimals={false} />
+          <Tooltip contentStyle={{ background: '#111826', border: '1px solid #27354a' }} />
+          <Bar dataKey="count" fill={SEVERITY_COLORS[1]} name="# judgments" />
+        </BarChart>
+      </div>
 
       <SectionLabel>Per-alert ranking</SectionLabel>
       <AlertTable rows={alertTable} />
@@ -226,7 +236,7 @@ export function ReportView({ markdown, filename }: { markdown: string; filename:
   return (
     <>
       <button onClick={() => downloadBlob(filename, markdown, 'text/markdown')}>⬇ Download full report (.md)</button>
-      <div style={{ marginTop: 14 }}>
+      <div className="markdown-body" style={{ marginTop: 14 }}>
         <ReactMarkdown>{markdown}</ReactMarkdown>
       </div>
     </>
@@ -255,6 +265,85 @@ function mergeCorrelationIntoTotals(totals: Record<string, number>, correlation:
   return totals
 }
 
+function AttemptsTable({ attempts }: { attempts: TimingAttempt[] }) {
+  const hasRound = attempts.some((a) => a.round != null)
+  return (
+    <div className="table-scroll">
+      <table className="data-table">
+        <thead>
+          <tr>
+            {hasRound && <th>Round</th>}
+            <th>Attempt</th>
+            <th>Start</th>
+            <th>End</th>
+            <th>Duration</th>
+            <th>Model load</th>
+            <th>Prompt tokens</th>
+            <th>Reading prompt (prefill)</th>
+            <th>Generating answer (decode)</th>
+            <th>Outcome</th>
+          </tr>
+        </thead>
+        <tbody>
+          {attempts.map((a, i) => (
+            <tr key={i}>
+              {hasRound && <td>{a.round ?? '-'}</td>}
+              <td>{a.attempt}</td>
+              <td>{a.start_ts}</td>
+              <td>{a.end_ts}</td>
+              <td>{formatDuration(a.duration_sec)}</td>
+              <td>{a.model_load_sec ? formatDuration(a.model_load_sec) : '-'}</td>
+              <td>{a.prompt_tokens != null ? String(a.prompt_tokens) : '-'}</td>
+              <td>{a.prompt_eval_sec != null ? formatDuration(a.prompt_eval_sec) : '-'}</td>
+              <td>{a.response_eval_sec != null ? formatDuration(a.response_eval_sec) : '-'}</td>
+              <td>{a.outcome}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function StageTable({ stageList }: { stageList: TimingStage[] }) {
+  return (
+    <>
+      <div className="table-scroll">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Stage</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Duration</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stageList.map((s, si) => (
+              <tr key={si}>
+                <td>{STAGE_LABELS[s.stage] ?? s.stage}</td>
+                <td>{s.start_ts}</td>
+                <td>{s.end_ts}</td>
+                <td>{formatDuration(s.duration_sec)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {stageList.map((s, si) =>
+        s.attempts && s.attempts.length > 0 ? (
+          <div key={si} style={{ marginTop: 10 }}>
+            <p className="small-muted">
+              ↳ {STAGE_LABELS[s.stage] ?? s.stage} — {s.attempts.length} attempt(s)
+            </p>
+            <AttemptsTable attempts={s.attempts} />
+          </div>
+        ) : null,
+      )}
+    </>
+  )
+}
+
 export function AlertTimingDetail({ item }: { item: ProcessedAlert }) {
   const t = item.timings
   return (
@@ -270,33 +359,25 @@ export function AlertTimingDetail({ item }: { item: ProcessedAlert }) {
       )}
       {t.runs.map((stageList, ri) =>
         stageList.length === 0 ? null : (
-          <div key={ri}>
+          <div key={ri} style={{ marginTop: ri > 0 ? 16 : 0 }}>
             <b>Run {ri + 1}</b>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Stage</th>
-                  <th>Start</th>
-                  <th>End</th>
-                  <th>Duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stageList.map((s, si) => (
-                  <tr key={si}>
-                    <td>{STAGE_LABELS[s.stage] ?? s.stage}</td>
-                    <td>{s.start_ts}</td>
-                    <td>{s.end_ts}</td>
-                    <td>{formatDuration(s.duration_sec)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <StageTable stageList={stageList} />
           </div>
         ),
       )}
+      <p className="small-muted" style={{ marginTop: 10 }}>
+        "Reading prompt" = time Ollama spent processing the input (prefill); "Generating answer" = time spent
+        producing the response (decode) - straight from Ollama's own response metadata, not estimated. "Model
+        load" only shows up when Ollama had to load the model fresh (usually just the very first call).
+      </p>
     </>
   )
+}
+
+export function CorrelationTimingDetail({ correlation }: { correlation: CorrelationResult | null }) {
+  const timings = correlation?.timings ?? []
+  if (timings.length === 0) return null
+  return <StageTable stageList={timings} />
 }
 
 export function TimingView({
@@ -335,13 +416,24 @@ export function TimingView({
       </MetricGrid>
 
       <SectionLabel>Time spent per stage (summed across all alerts & runs)</SectionLabel>
-      <BarChart width={700} height={Math.max(160, chartData.length * 40)} data={chartData} layout="vertical">
-        <CartesianGrid strokeDasharray="3 3" stroke="#27354a" />
-        <XAxis type="number" stroke="#8b949e" />
-        <YAxis type="category" dataKey="stage" width={220} stroke="#8b949e" />
-        <Tooltip contentStyle={{ background: '#111826', border: '1px solid #27354a' }} />
-        <Bar dataKey="seconds" fill={SEVERITY_COLORS[1]} />
-      </BarChart>
+      <div className="chart-box">
+        <BarChart width={700} height={Math.max(160, chartData.length * 40)} data={chartData} layout="vertical">
+          <CartesianGrid strokeDasharray="3 3" stroke="#27354a" />
+          <XAxis type="number" stroke="#8b949e" />
+          <YAxis type="category" dataKey="stage" width={220} stroke="#8b949e" />
+          <Tooltip contentStyle={{ background: '#111826', border: '1px solid #27354a' }} />
+          <Bar dataKey="seconds" fill={SEVERITY_COLORS[1]} />
+        </BarChart>
+      </div>
+
+      {correlation?.timings && correlation.timings.length > 0 && (
+        <>
+          <SectionLabel>Combined/correlated alert check timing</SectionLabel>
+          <Expander title={`Combined/correlated alert check  ⏱️ ${formatDuration(corrTotal)}`}>
+            <CorrelationTimingDetail correlation={correlation} />
+          </Expander>
+        </>
+      )}
 
       <SectionLabel>Per-alert timing detail</SectionLabel>
       {processed.map((item, i) => {

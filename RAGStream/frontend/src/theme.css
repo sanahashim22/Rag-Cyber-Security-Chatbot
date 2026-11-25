@@ -222,6 +222,7 @@ a { color: var(--accent-blue); }
 .run-card p { margin: 0 0 8px 0; }
 
 .table-scroll { overflow-x: auto; border-radius: 12px; }
+.chart-box { margin: 14px 0 24px 0; overflow-x: auto; }
 table.data-table { border: 1px solid var(--border-card); border-radius: 12px; border-collapse: separate; border-spacing: 0; width: 100%; overflow: hidden; font-size: 14px; }
 table.data-table th {
   background: #16233a; color: var(--text-strong); text-align: left; padding: 13px 16px;
@@ -300,6 +301,66 @@ select option { padding: 8px 10px; }
   border-radius: 999px;
   background: linear-gradient(90deg, #238636, #2ea043);
   transition: width 0.3s ease;
+}
+
+/* react-markdown renders plain semantic HTML with none of our own classes
+   (table.data-table etc never apply), so the Report tab needs its own
+   stylesheet - otherwise its tables/lists/code blocks render with zero
+   styling, just default browser spacing against the dark background. */
+.markdown-body h1 { font-size: 26px; margin: 0 0 16px 0; }
+.markdown-body h2 { font-size: 21px; margin: 32px 0 14px 0; border-bottom: 1px solid var(--border-card); padding-bottom: 8px; }
+.markdown-body h3 { font-size: 17px; margin: 24px 0 10px 0; }
+.markdown-body h4 { font-size: 15px; margin: 18px 0 8px 0; }
+.markdown-body p { margin: 0 0 14px 0; }
+.markdown-body ul, .markdown-body ol { margin: 0 0 14px 0; padding-left: 22px; }
+.markdown-body li { margin-bottom: 6px; line-height: 1.6; }
+.markdown-body li > p { margin-bottom: 6px; }
+.markdown-body hr { border: none; border-top: 1px solid var(--border-card); margin: 24px 0; }
+.markdown-body strong { color: var(--text-strong); }
+.markdown-body code {
+  background: #0d1117;
+  border: 1px solid var(--border-card);
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-size: 0.9em;
+}
+.markdown-body pre {
+  background: #0d1117;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  margin: 0 0 16px 0;
+}
+.markdown-body pre code { background: none; border: none; padding: 0; }
+.markdown-body table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--border-card);
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 0 0 18px 0;
+  font-size: 14px;
+}
+.markdown-body th {
+  background: #16233a;
+  color: var(--text-strong);
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-card);
+}
+.markdown-body td {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.markdown-body tr:last-child td { border-bottom: none; }
+.markdown-body blockquote {
+  border-left: 3px solid var(--border-card);
+  margin: 0 0 14px 0;
+  padding: 2px 16px;
+  color: var(--text-muted);
 }
 .callout-info { background: rgba(88, 166, 255, 0.08); border: 1px solid var(--border-card); color: var(--text); }
 .callout-warn { background: rgba(245, 158, 11, 0.1); border: 1px solid #5a4214; color: #f3d38a; }
