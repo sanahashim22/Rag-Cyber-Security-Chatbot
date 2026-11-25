@@ -61,6 +61,28 @@ export function severityRankColor(rank: number | null | undefined) {
   return SEVERITY_COLORS[rank]
 }
 
+/** Formats an ISO timestamp (from the backend, always UTC) in Pakistan
+ * Standard Time - PKT is a fixed UTC+5 offset year-round (no DST), so this
+ * is just a display-layer conversion; the API itself keeps returning plain
+ * UTC/ISO timestamps. */
+export function formatPKT(iso: string | null | undefined): string {
+  if (!iso) return '-'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Karachi',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(d)
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')} PKT`
+}
+
 export function formatDuration(seconds: number | null | undefined): string {
   if (seconds == null) return '-'
   if (seconds < 60) return `${seconds.toFixed(1)} sec`

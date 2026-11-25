@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { Callout, Expander } from './Common'
+import { Callout, Expander, formatPKT } from './Common'
 
 export function IntelDbPanel({ baseUrl, token }: { baseUrl: string; token: string }) {
   const queryClient = useQueryClient()
@@ -49,7 +49,7 @@ export function IntelDbPanel({ baseUrl, token }: { baseUrl: string; token: strin
       ) : (
         <Callout kind="success">
           Local copy: <b>{Math.round((local.status!.bytes ?? 0) / (1 << 20))} MB</b>, downloaded{' '}
-          {local.status!.modified}. Sources:{' '}
+          {formatPKT(local.status!.modified)}. Sources:{' '}
           {Object.entries(local.status!.sources)
             .map(([n, d]) => `${n} (${d})`)
             .join(', ') || 'unknown'}
@@ -73,7 +73,7 @@ export function IntelDbPanel({ baseUrl, token }: { baseUrl: string; token: strin
         (remoteInfo.ok ? (
           <Callout kind="info">
             On IDS-Dashboard: <b>{Math.round((remoteInfo.info.bytes ?? 0) / (1 << 20))} MB</b>, last modified{' '}
-            {remoteInfo.info.modified}.
+            {formatPKT(remoteInfo.info.modified)}.
           </Callout>
         ) : (
           <Callout kind="error">{remoteInfo.error}</Callout>
