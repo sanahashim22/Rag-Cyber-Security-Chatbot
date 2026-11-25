@@ -56,12 +56,14 @@ export const api = {
     run_judge: boolean
     run_mismatch: boolean
     run_correlation: boolean
+    repeats: number
   }) => req<{ job_id: string }>('/ranking/run', { method: 'POST', body: JSON.stringify(body) }),
   runComparison: (body: {
     entries: AlertEntry[]
     run_judge: boolean
     run_mismatch: boolean
     run_correlation: boolean
+    repeats: number
   }) => req<{ job_id: string }>('/ranking/compare', { method: 'POST', body: JSON.stringify(body) }),
   rankingJob: (jobId: string) => req<JobStatus<SingleRunResult>>(`/ranking/jobs/${jobId}`),
   comparisonJob: (jobId: string) => req<JobStatus<ComparisonResult>>(`/ranking/jobs/${jobId}`),

@@ -60,8 +60,8 @@ export function AutoRunLimitConfirm({
     <div className="panel">
       <div className="info-card-title">⚠️ {totalParsed} alerts found</div>
       <p>
-        <b>{fileChoice}</b> has <b>{totalParsed} alerts</b>. Ranking all of them (3 runs per alert, x4 models in
-        the 4-Model Comparison tab) can take a while on local models. Choose how many to process below.
+        <b>{fileChoice}</b> has <b>{totalParsed} alerts</b>. Ranking all of them (multiple runs per alert, x4
+        models in the 4-Model Comparison tab) can take a while on local models. Choose how many to process below.
       </p>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <input

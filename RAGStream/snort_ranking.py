@@ -1480,15 +1480,16 @@ def _format_bool(value) -> str:
 
 def _build_summary_section(processed: List[Dict]) -> List[str]:
     """Batch-level aggregate statistics across ALL processed alerts (and
-    their 3 runs each), mirroring the rank-distribution / rule-usage /
+    their repeated runs each), mirroring the rank-distribution / rule-usage /
     SID-check / judge-average / Snort-disagreement sections that
     build_report_rag.py used to write to report_<model>.md."""
     total_alerts = len(processed)
     all_runs = [r for item in processed for r in item["runs"]]
     n_judgments = len(all_runs)
+    repeats = len(processed[0]["runs"]) if processed else 0
 
     lines = ["## Summary statistics", ""]
-    lines.append(f"Aggregated across **{total_alerts} alerts × 3 runs = {n_judgments} judgments**.")
+    lines.append(f"Aggregated across **{total_alerts} alerts × {repeats} runs = {n_judgments} judgments**.")
     lines.append("")
 
     # --- Rank distribution (every individual run counted) ---
@@ -1540,13 +1541,14 @@ def build_report_markdown(processed: List[Dict], ranking_model: str) -> str:
     """processed = list of dicts returned by rank_alert_three_times."""
     total = len(processed)
     consistent_count = sum(1 for p in processed if p["consistent"])
+    repeats = len(processed[0]["runs"]) if processed else 0
 
     lines = [f"# Snort Alert Severity Ranking Report", ""]
     lines.append(f"- **Alerts processed:** {total}")
     lines.append(f"- **Ranking model:** `{ranking_model}` (Ollama, local)")
     lines.append(f"- **Judge model:** `{JUDGE_MODEL}` (Ollama, local, independent)")
-    lines.append(f"- **Repeats per alert:** 3")
-    lines.append(f"- **Consistent across all 3 runs:** {consistent_count}/{total}")
+    lines.append(f"- **Repeats per alert:** {repeats}")
+    lines.append(f"- **Consistent across all {repeats} runs:** {consistent_count}/{total}")
     lines.append("")
     lines.append("Severity scale: 1 = Critical, 2 = Likely real attack, 3 = Uncertain, "
                   "4 = Low severity, 5 = Informational/noise.")
@@ -1577,8 +1579,8 @@ def build_report_markdown(processed: List[Dict], ranking_model: str) -> str:
         # fixed above.
         lines.append(f"- **Source:** {source}")
         lines.append(f"- **Actual ranking:** {priority} (sid {sid})")
-        lines.append(f"- **AI severity ranks (3 runs):** {', '.join(str(r) for r in ranks)}")
-        lines.append(f"- **Consistent across 3 runs:** {'✅ Yes' if consistent else '❌ No'}")
+        lines.append(f"- **AI severity ranks ({repeats} runs):** {', '.join(str(r) for r in ranks)}")
+        lines.append(f"- **Consistent across {repeats} runs:** {'✅ Yes' if consistent else '❌ No'}")
         lines.append("")
 
         # Rule-docs lookup is also deterministic per alert (exact sid match,
@@ -1601,13 +1603,13 @@ def build_report_markdown(processed: List[Dict], ranking_model: str) -> str:
             lines.append("")
 
         # Retrieval is deterministic (same alert -> same query -> same
-        # chunks every time), so all 3 runs get identical chunks - show them
-        # ONCE here instead of repeating the same text 3 times below.
+        # chunks every time), so every run gets identical chunks - show them
+        # ONCE here instead of repeating the same text for each run below.
         retrieved = runs[0].get("retrieved_context") or ""
         total_chunks = [c.strip() for c in retrieved.split("<<<CHUNK_BREAK>>>") if c.strip()]
         sent_to_model = retrieved[:4000]
         chunks = [c.strip() for c in sent_to_model.split("<<<CHUNK_BREAK>>>") if c.strip()]
-        label = f"**Retrieved chunks for this alert ({len(chunks)} shown, same for all 3 runs"
+        label = f"**Retrieved chunks for this alert ({len(chunks)} shown, same for all {repeats} runs"
         if len(chunks) < len(total_chunks):
             label += f" - {len(total_chunks) - len(chunks)} more were retrieved but cut off by the 4000-char limit actually sent to the model"
         label += "):**"

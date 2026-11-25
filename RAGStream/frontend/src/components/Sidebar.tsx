@@ -33,9 +33,10 @@ export function Sidebar({ meta }: { meta: MetaInfo | undefined }) {
       <div className="info-card">
         <div className="info-card-title">ℹ️ How this works</div>
         <p style={{ margin: 0 }}>
-          Each alert is ranked 1-5 for severity, 3 times per model, citing its own Snort rule documentation (exact
-          sid lookup) plus retrieved NIST/ISO context. An independent judge model (<code>{meta.judge_model}</code>)
-          scores how well each justification is actually supported by the evidence.
+          Each alert is ranked 1-5 for severity, repeated per alert (configurable, to check consistency), citing
+          its own Snort rule documentation (exact sid lookup) plus retrieved NIST/ISO context. An independent
+          judge model (<code>{meta.judge_model}</code>) scores how well each justification is actually supported
+          by the evidence.
         </p>
       </div>
 

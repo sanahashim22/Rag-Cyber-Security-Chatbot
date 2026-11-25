@@ -18,9 +18,10 @@ def models():
 
 
 def _single_model_result(entries: List[Dict], model: str, run_judge: bool, run_mismatch: bool,
-                          run_correlation: bool, job_id: str) -> Dict[str, Any]:
+                          run_correlation: bool, repeats: int, job_id: str) -> Dict[str, Any]:
     processed = ranking_service.run_ranking(
         job_id, entries, model, state.rag_system, run_judge=run_judge, run_mismatch=run_mismatch,
+        repeats=repeats,
     )
     correlation = ranking_service.run_correlation_analysis(entries, processed, model, run_correlation)
     groups = (correlation or {}).get("groups") or []
@@ -44,7 +45,8 @@ def run(req: RunRankingRequest):
 
     def _job(job_id: str):
         return _single_model_result(
-            req.entries, req.model, req.run_judge, req.run_mismatch, req.run_correlation, job_id,
+            req.entries, req.model, req.run_judge, req.run_mismatch, req.run_correlation,
+            max(1, req.repeats), job_id,
         )
 
     job_id = jobs.start_job(_job)
@@ -64,7 +66,7 @@ def compare(req: RunComparisonRequest):
         for model in ranking_service.RANKING_MODELS:
             processed = ranking_service.run_ranking(
                 job_id, req.entries, model, state.rag_system, label_prefix=f"[{model}] ",
-                run_judge=req.run_judge, run_mismatch=req.run_mismatch,
+                run_judge=req.run_judge, run_mismatch=req.run_mismatch, repeats=max(1, req.repeats),
             )
             results[model] = processed
             correlation = ranking_service.run_correlation_analysis(

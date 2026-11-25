@@ -27,12 +27,19 @@ export function SingleModelPanel({
   const [runJudge, setRunJudge] = useState(false)
   const [runMismatch, setRunMismatch] = useState(false)
   const [runCorrelation, setRunCorrelation] = useState(false)
+  // Raw string while editing, not a number - see FileSelector.tsx's
+  // AutoRunLimitConfirm for why a controlled number input coerced through
+  // Number() on every keystroke breaks.
+  const [repeatsText, setRepeatsText] = useState('1')
+  const repeats = Math.max(1, Math.trunc(Number(repeatsText)) || 1)
   const [jobId, setJobId] = useState<string | null>(null)
   const [tab, setTab] = useState('ranking')
 
   const start = useMutation({
     mutationFn: () =>
-      api.runRanking({ entries, model, run_judge: runJudge, run_mismatch: runMismatch, run_correlation: runCorrelation }),
+      api.runRanking({
+        entries, model, run_judge: runJudge, run_mismatch: runMismatch, run_correlation: runCorrelation, repeats,
+      }),
     onSuccess: (r) => setJobId(r.job_id),
   })
 
@@ -80,6 +87,23 @@ export function SingleModelPanel({
           <input type="checkbox" checked={runCorrelation} onChange={(e) => setRunCorrelation(e.target.checked)} />{' '}
           Combined/correlated analysis
         </label>
+      </div>
+
+      <div style={{ marginBottom: 24 }}>
+        <label>
+          <span className="field-label">Runs per alert</span>
+          <input
+            type="number"
+            min={1}
+            value={repeatsText}
+            onChange={(e) => setRepeatsText(e.target.value)}
+            style={{ width: 120 }}
+          />
+        </label>
+        <p className="small-muted" style={{ marginTop: 6 }}>
+          How many times to re-rank each alert with the same model, to check consistency. Each run is a separate
+          LLM call, so more runs takes proportionally longer.
+        </p>
       </div>
 
       {job?.status === 'running' && <Callout kind="info">⏳ {job.progress.message}</Callout>}

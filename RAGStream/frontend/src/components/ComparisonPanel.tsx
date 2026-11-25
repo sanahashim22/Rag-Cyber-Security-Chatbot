@@ -17,12 +17,17 @@ export function ComparisonPanel({
   const [runJudge, setRunJudge] = useState(false)
   const [runMismatch, setRunMismatch] = useState(false)
   const [runCorrelation, setRunCorrelation] = useState(false)
+  const [repeatsText, setRepeatsText] = useState('1')
+  const repeats = Math.max(1, Math.trunc(Number(repeatsText)) || 1)
   const [jobId, setJobId] = useState<string | null>(null)
   const [tab, setTab] = useState('ranking')
   const [activeModel, setActiveModel] = useState(models[0])
 
   const start = useMutation({
-    mutationFn: () => api.runComparison({ entries, run_judge: runJudge, run_mismatch: runMismatch, run_correlation: runCorrelation }),
+    mutationFn: () =>
+      api.runComparison({
+        entries, run_judge: runJudge, run_mismatch: runMismatch, run_correlation: runCorrelation, repeats,
+      }),
     onSuccess: (r) => setJobId(r.job_id),
   })
 
@@ -62,13 +67,31 @@ export function ComparisonPanel({
         </label>
       </div>
 
+      <div style={{ marginBottom: 24 }}>
+        <label>
+          <span className="field-label">Runs per alert</span>
+          <input
+            type="number"
+            min={1}
+            value={repeatsText}
+            onChange={(e) => setRepeatsText(e.target.value)}
+            style={{ width: 120 }}
+          />
+        </label>
+        <p className="small-muted" style={{ marginTop: 6 }}>
+          How many times to re-rank each alert with each model, to check consistency. Each run is a separate LLM
+          call, so more runs takes proportionally longer.
+        </p>
+      </div>
+
       {job?.status === 'running' && <Callout kind="info">⏳ {job.progress.message}</Callout>}
       {job?.status === 'error' && <Callout kind="error">{job.error}</Callout>}
 
       {!result ? (
         <Callout kind="info">
-          Click <b>Run all 4 models</b> to rank every alert with all 4 models (3 runs each) and compare them side
-          by side. This runs 12 full passes per alert, so it takes roughly 4x longer than the single-model tab.
+          Click <b>Run all 4 models</b> to rank every alert with all 4 models ({repeats} run(s) each) and compare
+          them side by side. This runs {models.length * repeats} full pass(es) per alert, so it takes roughly 4x
+          longer than the single-model tab.
         </Callout>
       ) : (
         <>
@@ -170,7 +193,8 @@ export function ComparisonPanel({
             <>
               <p className="small-muted">
                 Rule documentation and retrieved NIST/ISO context are identical for every model on a given alert, so
-                they're shown once per alert; each model tab below has its own 3 runs.
+                they're shown once per alert; each model tab below has its own{' '}
+                {result.per_model[activeModel].processed[0]?.runs.length ?? repeats} run(s).
               </p>
               <ModelTabs models={models} active={activeModel} onChange={setActiveModel} />
               <ReasoningView processed={result.per_model[activeModel].processed} />

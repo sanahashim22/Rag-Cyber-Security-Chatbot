@@ -25,6 +25,7 @@ export function modeRank(ranks: number[]): number {
 }
 
 export function AlertTable({ rows }: { rows: AlertTableRow[] }) {
+  const nRuns = rows[0]?.ranks.length
   return (
     <div className="table-scroll">
       <table className="data-table">
@@ -36,7 +37,7 @@ export function AlertTable({ rows }: { rows: AlertTableRow[] }) {
             <th>Actual Ranking</th>
             <th>SID</th>
             <th>Majority Rank</th>
-            <th>Ranks (3 runs)</th>
+            <th>Ranks{nRuns ? ` (${nRuns} run${nRuns === 1 ? '' : 's'})` : ''}</th>
             <th>Consistent</th>
             <th>Avg Judge Score</th>
           </tr>
@@ -264,7 +265,7 @@ export function AlertTimingDetail({ item }: { item: ProcessedAlert }) {
       {t.retrieval && (
         <p className="small-muted">
           🔍 RAG retrieval: {t.retrieval.start_ts} → {t.retrieval.end_ts} ({formatDuration(t.retrieval.duration_sec)}) -
-          shared by all 3 runs below
+          shared by all {t.runs.length} run(s) below
         </p>
       )}
       {t.runs.map((stageList, ri) =>

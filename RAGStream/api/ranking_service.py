@@ -34,7 +34,7 @@ AUTO_RUN_LIMIT = 10
 
 
 def mode_rank(ranks: List[int]) -> int:
-    """Majority vote across the 3 runs; ties broken toward the first run's value."""
+    """Majority vote across the repeated runs; ties broken toward the first run's value."""
     counts = Counter(ranks)
     best = max(counts.values())
     for r in ranks:
@@ -97,9 +97,12 @@ def build_correlation_table(groups: List[Dict]) -> List[Dict]:
 
 def run_ranking(job_id: str, entries: List[Dict], model: str, rag_system,
                  label_prefix: str = "", run_judge: bool = True,
-                 run_mismatch: bool = True) -> List[Dict]:
+                 run_mismatch: bool = True, repeats: int = 3) -> List[Dict]:
     """Runs rank_alert_three_times over every alert with `model`, reporting
-    progress into the job instead of a Streamlit progress bar."""
+    progress into the job instead of a Streamlit progress bar. `repeats` is
+    user-configurable from the frontend (default 1 there) - snort_ranking.py
+    itself already supported this per-call, dashboard_app.py just never
+    exposed it."""
     from . import jobs
 
     processed = []
@@ -115,7 +118,7 @@ def run_ranking(job_id: str, entries: List[Dict], model: str, rag_system,
             )
 
         result = snort_ranking.rank_alert_three_times(
-            rag_core.ollama_client, model, alert_entry, rag_system, repeats=3,
+            rag_core.ollama_client, model, alert_entry, rag_system, repeats=repeats,
             progress_cb=_progress, run_judge=run_judge, run_mismatch=run_mismatch,
         )
         processed.append(result)
@@ -203,10 +206,11 @@ def _append_alert_timing_text(lines: List[str], item: Dict) -> None:
         f"{timings.get('alert_end_ts', '?')}  (total {format_duration(timings.get('alert_duration_sec'))})"
     )
     retrieval = timings.get("retrieval")
+    n_runs = len(timings.get("runs", []))
     if retrieval:
         lines.append(
             f"  RAG retrieval: {retrieval['start_ts']} -> {retrieval['end_ts']} "
-            f"({format_duration(retrieval['duration_sec'])}) - shared by all 3 runs below"
+            f"({format_duration(retrieval['duration_sec'])}) - shared by all {n_runs} run(s) below"
         )
     for run_idx, stage_list in enumerate(timings.get("runs", []), 1):
         if not stage_list:
@@ -340,6 +344,8 @@ def build_comparison_excel(entries: List[Dict], results: Dict[str, List[Dict]]) 
     ws = wb.active
     ws.title = "4-Model Comparison"
 
+    repeats = len(results[RANKING_MODELS[0]][0]["runs"]) if entries else 1
+
     fixed_headers = ["Alert #", "Alert ID", "Source", "Alert Name", "Actual Ranking"]
     total_cols = len(fixed_headers) + len(RANKING_MODELS) * 2
     last_col = get_column_letter(total_cols)
@@ -358,8 +364,8 @@ def build_comparison_excel(entries: List[Dict], results: Dict[str, List[Dict]]) 
     ws.merge_cells(f"A2:{last_col}2")
     cell = ws["A2"]
     cell.value = (
-        "Each alert is ranked 1-5 (1 = critical ... 5 = informational/noise) by each model, 3 times "
-        "(repeats), using the same retrieved NIST/ISO context and exact sid-matched Snort rule "
+        f"Each alert is ranked 1-5 (1 = critical ... 5 = informational/noise) by each model, {repeats} "
+        "time(s) (repeats), using the same retrieved NIST/ISO context and exact sid-matched Snort rule "
         "documentation. Judge score (0.0-1.0, independent gemma2:2b model) measures how well the "
         "model's justification is actually supported by the evidence it was given."
     )
@@ -392,7 +398,7 @@ def build_comparison_excel(entries: List[Dict], results: Dict[str, List[Dict]]) 
         ws.cell(row=4, column=i).border = border
     col = len(fixed_headers) + 1
     for _ in RANKING_MODELS:
-        for label in ["Ranks (3 runs)", "Judge Score (avg)"]:
+        for label in [f"Ranks ({repeats} run(s))", "Judge Score (avg)"]:
             cell = ws.cell(row=4, column=col, value=label)
             cell.font = Font(name="Arial", size=10, bold=True)
             cell.fill = PatternFill("solid", fgColor="FFD9D9D9")

@@ -17,6 +17,7 @@ class RunRankingRequest(BaseModel):
     run_judge: bool = True
     run_mismatch: bool = True
     run_correlation: bool = True
+    repeats: int = 1
 
 
 class RunComparisonRequest(BaseModel):
@@ -24,6 +25,7 @@ class RunComparisonRequest(BaseModel):
     run_judge: bool = True
     run_mismatch: bool = True
     run_correlation: bool = True
+    repeats: int = 1
 
 
 class PullAlertsRequest(BaseModel):
