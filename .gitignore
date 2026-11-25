@@ -18,3 +18,9 @@ RAGStream/alert_inputs/*
 # (~1.4GB, refreshed independently on the IDS sensor PC) - never commit this
 RAGStream/intel.db
 RAGStream/intel.db.part
+
+# React frontend - installed packages, the production build, and TS's own
+# incremental-build cache (all generated from source, not something to commit)
+RAGStream/frontend/node_modules/
+RAGStream/frontend/dist/
+RAGStream/frontend/*.tsbuildinfo
