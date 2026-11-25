@@ -14,7 +14,12 @@ export function ReceiveFromIdsDashboard({
 }) {
   const [mode, setMode] = useState<'window' | 'last_n'>('window')
   const [window, setWindowLen] = useState('5 minutes')
-  const [lastN, setLastN] = useState(5)
+  // Raw string while editing, not a number - see FileSelector.tsx's
+  // AutoRunLimitConfirm for why a controlled number input coerced through
+  // Number() on every keystroke breaks (emptying the field snaps to "0",
+  // then typing produces "02" etc).
+  const [lastNText, setLastNText] = useState('5')
+  const lastN = Math.min(Math.max(1, Math.trunc(Number(lastNText)) || 1), 150000)
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
   const queryClient = useQueryClient()
 
@@ -75,8 +80,8 @@ export function ReceiveFromIdsDashboard({
           type="number"
           min={1}
           max={150000}
-          value={lastN}
-          onChange={(e) => setLastN(Number(e.target.value))}
+          value={lastNText}
+          onChange={(e) => setLastNText(e.target.value)}
           style={{ width: 120 }}
         />
       )}
