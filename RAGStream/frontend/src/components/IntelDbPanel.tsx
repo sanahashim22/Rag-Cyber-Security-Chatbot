@@ -37,8 +37,7 @@ export function IntelDbPanel({ baseUrl, token }: { baseUrl: string; token: strin
       <p className="small-muted">
         Shared database from the IDS sensor PC (Talos/Snort rule docs, CVEs with CVSS/EPSS/CISA-KEV, MITRE
         ATT&CK). When present, ranking looks up each alert's rule here FIRST, falling back to{' '}
-        <code>rule_docs_preprocessed_by_sid.json</code> only for a sid intel.db doesn't have. Manual refresh
-        only - it's about 1.4GB.
+        <code>rule_docs_preprocessed_by_sid.json</code> only for a sid intel.db doesn't have.
       </p>
 
       {!local?.downloaded ? (
