@@ -1,4 +1,5 @@
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from 'recharts'
 import type {
   AggregateStats,
@@ -241,7 +242,7 @@ export function ReportView({ markdown, filename }: { markdown: string; filename:
     <>
       <button onClick={() => downloadBlob(filename, markdown, 'text/markdown')}>⬇ Download full report (.md)</button>
       <div className="markdown-body" style={{ marginTop: 14 }}>
-        <ReactMarkdown>{markdown}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
       </div>
     </>
   )
