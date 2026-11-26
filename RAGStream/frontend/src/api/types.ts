@@ -82,7 +82,7 @@ export interface ProcessedAlert {
 export interface CorrelationGroup {
   kind: string
   alert_ids: string[]
-  combined_rank: number | null
+  combined_severity_rank: number | null
   event_description: string
 }
 

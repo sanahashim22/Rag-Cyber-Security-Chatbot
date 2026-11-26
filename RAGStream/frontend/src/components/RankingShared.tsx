@@ -101,8 +101,8 @@ export function CorrelationSection({ correlation }: { correlation: CorrelationRe
                 <tr key={i}>
                   <td>🔗 AI-suggested</td>
                   <td>{g.alert_ids.join(', ')}</td>
-                  <td style={{ background: severityRankColor(g.combined_rank ?? undefined) + '26', fontWeight: 700 }}>
-                    {g.combined_rank ?? '-'}
+                  <td style={{ background: severityRankColor(g.combined_severity_rank ?? undefined) + '26', fontWeight: 700 }}>
+                    {g.combined_severity_rank ?? '-'}
                   </td>
                   <td>{g.event_description}</td>
                 </tr>
