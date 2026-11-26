@@ -128,13 +128,28 @@ def run_ranking(job_id: str, entries: List[Dict], model: str, rag_system,
 
 
 def run_correlation_analysis(entries: List[Dict], processed: List[Dict], model: str,
-                              run_correlation: bool) -> Optional[Dict]:
+                              run_correlation: bool, job_id: Optional[str] = None,
+                              label_prefix: str = "") -> Optional[Dict]:
     """Same 'only makes sense for more than one alert' guard as
     dashboard_app.py's run_correlation_analysis(). None means 'don't run /
     don't show this section' - as opposed to an empty groups list, which
-    means 'it ran and found nothing'."""
+    means 'it ran and found nothing'.
+
+    Reports progress into the job (same role dashboard_app.py's
+    `st.spinner(f"Checking for combined/correlated alert groups with
+    {model}...")` played) so the frontend's progress bar/message doesn't
+    sit frozen on the last "Ranked N/N alert(s)" text while this - often
+    multi-LLM-call - step runs."""
     if not run_correlation or len(entries) <= 1:
         return None
+    if job_id is not None:
+        from . import jobs
+
+        total = len(entries)
+        jobs.update_progress(
+            job_id, f"{label_prefix}Checking for combined/correlated alert groups with {model}...",
+            current=total, total=total,
+        )
     return snort_ranking.analyze_correlated_alerts(rag_core.ollama_client, model, processed)
 
 

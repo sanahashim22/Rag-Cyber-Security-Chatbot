@@ -23,7 +23,9 @@ def _single_model_result(entries: List[Dict], model: str, run_judge: bool, run_m
         job_id, entries, model, state.rag_system, run_judge=run_judge, run_mismatch=run_mismatch,
         repeats=repeats,
     )
-    correlation = ranking_service.run_correlation_analysis(entries, processed, model, run_correlation)
+    correlation = ranking_service.run_correlation_analysis(
+        entries, processed, model, run_correlation, job_id=job_id,
+    )
     groups = (correlation or {}).get("groups") or []
     return {
         "kind": "single",
@@ -71,6 +73,7 @@ def compare(req: RunComparisonRequest):
             results[model] = processed
             correlation = ranking_service.run_correlation_analysis(
                 req.entries, processed, model, req.run_correlation,
+                job_id=job_id, label_prefix=f"[{model}] ",
             )
             correlations[model] = correlation
             groups = (correlation or {}).get("groups") or []
