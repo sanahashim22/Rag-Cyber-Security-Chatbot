@@ -184,7 +184,11 @@ export function ComparisonPanel({
                             <td key={m} style={{ background: severityRankColor(mr.majority_rank) + '26', minWidth: 130 }}>
                               <div className="model-cell">
                                 <span className="rank-badge">{mr.majority_rank}</span>
-                                <span className="model-detail">runs {mr.ranks.join(', ')}</span>
+                                <span className="model-detail">
+                                  {mr.ranks.length === 1
+                                    ? `rank: ${mr.ranks[0]}`
+                                    : `ranks across ${mr.ranks.length} runs: ${mr.ranks.join(', ')}`}
+                                </span>
                                 <span className="model-detail">judge {mr.avg_judge_score ?? '-'}</span>
                               </div>
                             </td>
