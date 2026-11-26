@@ -262,11 +262,20 @@ button.btn-primary { background: linear-gradient(135deg, #238636, #2ea043); bord
 
 select, input[type="text"], input[type="password"], input[type="number"] {
   background-color: #0d1117;
-  border: 1px solid var(--border-card);
+  border: 1px solid #33455f;
   border-radius: 10px;
   color: var(--text-strong);
   padding: 10px 12px;
   font-size: 14.5px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+select:hover, input[type="text"]:hover, input[type="password"]:hover, input[type="number"]:hover {
+  border-color: #4a5e82;
+}
+select:focus, input[type="text"]:focus, input[type="password"]:focus, input[type="number"]:focus {
+  outline: none;
+  border-color: #58a6ff;
+  box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
 }
 /* Chromium/Edge honor padding on <option>; other browsers ignore it
    harmlessly, so this is a free improvement where it's supported. */
@@ -279,6 +288,9 @@ select option { padding: 8px 10px; }
   font-weight: 600;
   color: var(--text);
 }
+
+.dropdown-card { margin-bottom: 24px; }
+.dropdown-card .field-label { margin-bottom: 14px; }
 
 .control-row { display: flex; gap: 18px; align-items: flex-end; flex-wrap: wrap; }
 .checkbox-row { display: flex; align-items: center; gap: 9px; font-size: 14.5px; }

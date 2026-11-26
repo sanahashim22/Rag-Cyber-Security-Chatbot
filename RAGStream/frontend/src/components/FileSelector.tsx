@@ -15,17 +15,19 @@ export function FileDropdown({
   onChange: (v: string) => void
 }) {
   return (
-    <label>
-      <span className="field-label">📄 Which file do you want to rank?</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} style={{ minWidth: 320 }}>
-        <option value={ALL_FILES_CHOICE}>{ALL_FILES_CHOICE}</option>
-        {scan.file_summaries.map((f) => (
-          <option key={f.name} value={f.name}>
-            {f.name} ({f.count})
-          </option>
-        ))}
-      </select>
-    </label>
+    <div className="panel dropdown-card">
+      <label>
+        <span className="field-label">📄 Which file do you want to rank?</span>
+        <select value={value} onChange={(e) => onChange(e.target.value)} style={{ minWidth: 320 }}>
+          <option value={ALL_FILES_CHOICE}>{ALL_FILES_CHOICE}</option>
+          {scan.file_summaries.map((f) => (
+            <option key={f.name} value={f.name}>
+              {f.name} ({f.count})
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
   )
 }
 

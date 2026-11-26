@@ -66,22 +66,28 @@ export function ReceiveFromIdsDashboard({
       </div>
 
       {mode === 'window' ? (
-        <select value={window} onChange={(e) => setWindowLen(e.target.value)}>
-          {(lengths?.lengths ?? ['5 minutes']).map((l) => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-        </select>
+        <label>
+          <span className="field-label">Time window length</span>
+          <select value={window} onChange={(e) => setWindowLen(e.target.value)}>
+            {(lengths?.lengths ?? ['5 minutes']).map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </label>
       ) : (
-        <input
-          type="number"
-          min={1}
-          max={150000}
-          value={lastNText}
-          onChange={(e) => setLastNText(e.target.value)}
-          style={{ width: 120 }}
-        />
+        <label>
+          <span className="field-label">Number of most-recent alerts</span>
+          <input
+            type="number"
+            min={1}
+            max={150000}
+            value={lastNText}
+            onChange={(e) => setLastNText(e.target.value)}
+            style={{ width: 120 }}
+          />
+        </label>
       )}
 
       <div style={{ marginTop: 12 }}>
