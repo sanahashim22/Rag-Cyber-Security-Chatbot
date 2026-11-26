@@ -240,7 +240,9 @@ export function ReasoningView({ processed }: { processed: ProcessedAlert[] }) {
 export function ReportView({ markdown, filename }: { markdown: string; filename: string }) {
   return (
     <>
-      <button onClick={() => downloadBlob(filename, markdown, 'text/markdown')}>⬇ Download full report (.md)</button>
+      <button style={{ marginTop: 16 }} onClick={() => downloadBlob(filename, markdown, 'text/markdown')}>
+        ⬇ Download full report (.md)
+      </button>
       <div className="markdown-body" style={{ marginTop: 14 }}>
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
       </div>
