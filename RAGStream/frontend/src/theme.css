@@ -230,7 +230,8 @@ a { color: var(--accent-blue); }
   text-transform: uppercase;
   margin-bottom: 10px;
 }
-.rule-doc-body { color: var(--text); font-size: 14.5px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.rule-doc-body { color: var(--text); font-size: 14.5px; line-height: 1.7; overflow-wrap: anywhere; }
+.rule-doc-body .rule-doc-subline { padding-left: 18px; }
 .small-muted { color: var(--text-muted); font-size: 13.5px; line-height: 1.6; }
 
 .run-card { background: #0f141d; border: 1px solid var(--border); border-radius: 14px; padding: 16px 20px; margin-bottom: 14px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15); }

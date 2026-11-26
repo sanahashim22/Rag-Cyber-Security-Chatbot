@@ -74,10 +74,25 @@ export function Expander({ title, children, defaultOpen = false }: { title: Reac
 
 export function RuleCard({ title, body, accent = 'blue' }: { title: string; body: string; accent?: 'blue' | 'green' | 'orange' }) {
   if (!body) return null
+  // The backend formats this as plain text meant for an LLM prompt, where a
+  // leading "  " marks a sub-detail line (e.g. "  Message: ...") under a
+  // flush-left header line (e.g. "Rule 2100001: ..."). Rendered verbatim in
+  // a proportional font that reads as a ragged, misaligned left edge rather
+  // than intentional structure - strip the literal spaces and render that
+  // same hierarchy with real indentation instead.
   return (
     <div className={`rule-doc-card accent-${accent}`}>
       <div className="rule-doc-title">{title}</div>
-      <div className="rule-doc-body">{body}</div>
+      <div className="rule-doc-body">
+        {body.split('\n').map((line, i) => {
+          const isSubline = line.startsWith('  ')
+          return (
+            <div key={i} className={isSubline ? 'rule-doc-subline' : undefined}>
+              {line.trim() || ' '}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
