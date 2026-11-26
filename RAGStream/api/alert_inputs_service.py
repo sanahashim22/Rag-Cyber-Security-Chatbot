@@ -15,6 +15,7 @@ import hashlib
 import json
 import re
 import sqlite3
+import time
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
@@ -210,42 +211,90 @@ def get_local_intel_status() -> Dict[str, Any] | None:
     }
 
 
+_DOWNLOAD_MAX_ATTEMPTS = 6
+_DOWNLOAD_RETRY_BACKOFF_SEC = 4
+
+
 def download_intel_db(job_id: str, base_url: str, token: str) -> Dict[str, Any]:
     """Streams IDS-Dashboard's /intel/intel.db into snort_ranking.INTEL_DB_PATH,
-    atomically (temp file + rename), reporting progress into the job."""
+    atomically (temp file + rename), reporting progress into the job.
+
+    A ~1.5GB transfer over a real network has a real chance of the
+    connection dropping partway through (IncompleteRead / ChunkedEncoding
+    errors) before ever reaching the last byte - dashboard_app.py's original
+    version treated that as fatal and made the user start the whole download
+    over by hand. This instead retries a few times and, if the server
+    supports HTTP Range requests (checked via a 206 response), resumes from
+    the last byte actually written instead of re-downloading what already
+    succeeded. If the server doesn't support ranges (responds 200 to a
+    range request), it just falls back to restarting that one attempt from
+    scratch rather than corrupting the file."""
     from . import jobs
 
     dest = snort_ranking.INTEL_DB_PATH
     part = dest.with_name(dest.name + ".part")
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    headers_base = {"Authorization": f"Bearer {token}"} if token else {}
     url = base_url.rstrip("/") + "/intel/intel.db"
-    done = 0
+
+    done = part.stat().st_size if part.is_file() else 0
     total = 0
-    try:
-        with requests.get(url, headers=headers, timeout=60, stream=True) as resp:
-            if resp.status_code != 200:
-                try:
-                    detail = resp.json().get("error", resp.text[:300])
-                except Exception:
-                    detail = resp.text[:300]
-                return {"ok": False, "message": f"IDS-Dashboard returned {resp.status_code}: {detail}"}
-            total = int(resp.headers.get("Content-Length") or 0)
-            with open(part, "wb") as out:
-                for chunk in resp.iter_content(chunk_size=1 << 20):
-                    if not chunk:
-                        continue
-                    out.write(chunk)
-                    done += len(chunk)
-                    if total:
-                        jobs.update_progress(
-                            job_id, f"Downloading intel.db... {done >> 20}/{total >> 20} MB",
-                            current=done, total=total,
-                        )
-    except requests.RequestException as e:
-        part.unlink(missing_ok=True)
-        return {"ok": False, "message": f"Could not reach {url}: {e}"}
-    if total and done != total:
-        part.unlink(missing_ok=True)
-        return {"ok": False, "message": f"Download stopped at {done} of {total} bytes; nothing was replaced."}
-    part.replace(dest)
-    return {"ok": True, "message": f"Saved intel.db ({done >> 20} MB)."}
+    last_error = ""
+
+    for attempt in range(1, _DOWNLOAD_MAX_ATTEMPTS + 1):
+        resuming = done > 0
+        headers = dict(headers_base)
+        if resuming:
+            headers["Range"] = f"bytes={done}-"
+        retry_note = f" (retry {attempt - 1}/{_DOWNLOAD_MAX_ATTEMPTS - 1})" if attempt > 1 else ""
+        try:
+            with requests.get(url, headers=headers, timeout=60, stream=True) as resp:
+                if resp.status_code not in (200, 206):
+                    try:
+                        detail = resp.json().get("error", resp.text[:300])
+                    except Exception:
+                        detail = resp.text[:300]
+                    part.unlink(missing_ok=True)
+                    return {"ok": False, "message": f"IDS-Dashboard returned {resp.status_code}: {detail}"}
+
+                # Range accepted (206) -> append from where we left off.
+                # Range ignored (200 while resuming) -> server doesn't
+                # support it, so the body is the WHOLE file again - start
+                # this attempt's write over from scratch.
+                if resuming and resp.status_code == 200:
+                    done = 0
+                mode = "ab" if (resuming and resp.status_code == 206) else "wb"
+
+                content_length = int(resp.headers.get("Content-Length") or 0)
+                total = (done + content_length) if resp.status_code == 206 else content_length
+
+                with open(part, mode) as out:
+                    for chunk in resp.iter_content(chunk_size=1 << 20):
+                        if not chunk:
+                            continue
+                        out.write(chunk)
+                        done += len(chunk)
+                        if total:
+                            jobs.update_progress(
+                                job_id, f"Downloading intel.db... {done >> 20}/{total >> 20} MB{retry_note}",
+                                current=done, total=total,
+                            )
+            if total and done != total:
+                last_error = f"connection dropped at {done >> 20}/{total >> 20} MB"
+                if attempt < _DOWNLOAD_MAX_ATTEMPTS:
+                    time.sleep(_DOWNLOAD_RETRY_BACKOFF_SEC)
+                continue
+            part.replace(dest)
+            recovered = f" (recovered after {attempt} attempt(s))" if attempt > 1 else ""
+            return {"ok": True, "message": f"Saved intel.db ({done >> 20} MB).{recovered}"}
+        except requests.RequestException as e:
+            last_error = str(e)
+            done = part.stat().st_size if part.is_file() else done
+            if attempt < _DOWNLOAD_MAX_ATTEMPTS:
+                time.sleep(_DOWNLOAD_RETRY_BACKOFF_SEC)
+            continue
+
+    part.unlink(missing_ok=True)
+    return {
+        "ok": False,
+        "message": f"Could not reach {url} after {_DOWNLOAD_MAX_ATTEMPTS} attempts: {last_error}",
+    }
