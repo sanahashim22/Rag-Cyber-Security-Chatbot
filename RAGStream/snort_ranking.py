@@ -1548,7 +1548,10 @@ def build_report_markdown(processed: List[Dict], ranking_model: str) -> str:
     lines.append(f"- **Ranking model:** `{ranking_model}` (Ollama, local)")
     lines.append(f"- **Judge model:** `{JUDGE_MODEL}` (Ollama, local, independent)")
     lines.append(f"- **Repeats per alert:** {repeats}")
-    lines.append(f"- **Consistent across all {repeats} runs:** {consistent_count}/{total}")
+    # Only meaningful with 2+ runs - with 1 run there's nothing to be
+    # "consistent" across (it's trivially always every alert).
+    if repeats > 1:
+        lines.append(f"- **Consistent across all {repeats} runs:** {consistent_count}/{total}")
     lines.append("")
     lines.append("Severity scale: 1 = Critical, 2 = Likely real attack, 3 = Uncertain, "
                   "4 = Low severity, 5 = Informational/noise.")
@@ -1579,8 +1582,11 @@ def build_report_markdown(processed: List[Dict], ranking_model: str) -> str:
         # fixed above.
         lines.append(f"- **Source:** {source}")
         lines.append(f"- **Actual ranking:** {priority} (sid {sid})")
-        lines.append(f"- **AI severity ranks ({repeats} runs):** {', '.join(str(r) for r in ranks)}")
-        lines.append(f"- **Consistent across {repeats} runs:** {'✅ Yes' if consistent else '❌ No'}")
+        if repeats > 1:
+            lines.append(f"- **AI severity ranks ({repeats} runs):** {', '.join(str(r) for r in ranks)}")
+            lines.append(f"- **Consistent across {repeats} runs:** {'✅ Yes' if consistent else '❌ No'}")
+        else:
+            lines.append(f"- **AI severity rank:** {ranks[0]}")
         lines.append("")
 
         # Rule-docs lookup is also deterministic per alert (exact sid match,

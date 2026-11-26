@@ -34,7 +34,11 @@ export function modeRank(ranks: number[]): number {
 }
 
 export function AlertTable({ rows }: { rows: AlertTableRow[] }) {
-  const nRuns = rows[0]?.ranks.length
+  const nRuns = rows[0]?.ranks.length ?? 1
+  // With only 1 run, "majority rank"/"consistent" are meaningless (nothing
+  // to take a majority of, and it's trivially always "consistent") - just
+  // show the single rank instead of those columns.
+  const multiRun = nRuns > 1
   return (
     <div className="table-scroll">
       <table className="data-table">
@@ -45,9 +49,15 @@ export function AlertTable({ rows }: { rows: AlertTableRow[] }) {
             <th>Alert Message</th>
             <th>Actual Ranking</th>
             <th>SID</th>
-            <th>Majority Rank</th>
-            <th>Ranks{nRuns ? ` (${nRuns} run${nRuns === 1 ? '' : 's'})` : ''}</th>
-            <th>Consistent</th>
+            {multiRun ? (
+              <>
+                <th>Majority Rank</th>
+                <th>Ranks ({nRuns} runs)</th>
+                <th>Consistent</th>
+              </>
+            ) : (
+              <th>Rank</th>
+            )}
             <th>Avg Judge Score</th>
           </tr>
         </thead>
@@ -59,11 +69,19 @@ export function AlertTable({ rows }: { rows: AlertTableRow[] }) {
               <td style={{ minWidth: 240 }}>{r.alert_message}</td>
               <td>{r.actual_ranking}</td>
               <td>{r.sid}</td>
-              <td style={{ background: severityRankColor(r.majority_rank) + '26', fontWeight: 700 }}>
-                {r.majority_rank}
-              </td>
-              <td>{r.ranks.join(', ')}</td>
-              <td>{r.consistent ? '✅ Yes' : '❌ No'}</td>
+              {multiRun ? (
+                <>
+                  <td style={{ background: severityRankColor(r.majority_rank) + '26', fontWeight: 700 }}>
+                    {r.majority_rank}
+                  </td>
+                  <td>{r.ranks.join(', ')}</td>
+                  <td>{r.consistent ? '✅ Yes' : '❌ No'}</td>
+                </>
+              ) : (
+                <td style={{ background: severityRankColor(r.majority_rank) + '26', fontWeight: 700 }}>
+                  {r.majority_rank}
+                </td>
+              )}
               <td>{r.avg_judge_score ?? '-'}</td>
             </tr>
           ))}
@@ -146,6 +164,9 @@ export function RankingOverview({
   alertCount?: number
 }) {
   const distData = [1, 2, 3, 4, 5].map((r) => ({ rank: String(r), count: stats.rank_counts[r - 1] }))
+  // Only meaningful with 2+ runs per alert - with 1 run there's nothing to
+  // be "consistent" across (it's trivially always 1/1).
+  const nRuns = alertTable[0]?.ranks.length ?? 1
 
   return (
     <>
@@ -162,7 +183,13 @@ export function RankingOverview({
 
       <MetricGrid>
         <MetricCard label="Alerts Ranked" value={stats.total_alerts} accent="blue" />
-        <MetricCard label="Consistent (3/3)" value={`${stats.consistent_count}/${stats.total_alerts}`} accent="green" />
+        {nRuns > 1 && (
+          <MetricCard
+            label={`Consistent (across ${nRuns} runs)`}
+            value={`${stats.consistent_count}/${stats.total_alerts}`}
+            accent="green"
+          />
+        )}
         <MetricCard label="Avg Judge Score" value={stats.avg_judge != null ? stats.avg_judge.toFixed(2) : '-'} accent="purple" />
         <MetricCard label="Judge Model" value={runJudge ? judgeModel : 'Skipped'} accent="red" />
       </MetricGrid>

@@ -125,7 +125,7 @@ export function ComparisonPanel({
                   <thead>
                     <tr>
                       <th>Model</th>
-                      <th>Consistency (3/3)</th>
+                      {repeats > 1 && <th>Consistent (across {repeats} runs)</th>}
                       <th>Avg Judge Score</th>
                       <th>Rank 1</th>
                       <th>Rank 2</th>
@@ -138,9 +138,11 @@ export function ComparisonPanel({
                     {result.model_summary.map((s) => (
                       <tr key={s.model}>
                         <td>{s.model}</td>
-                        <td>
-                          {s.consistent_count}/{s.total_alerts}
-                        </td>
+                        {repeats > 1 && (
+                          <td>
+                            {s.consistent_count}/{s.total_alerts}
+                          </td>
+                        )}
                         <td>{s.avg_judge != null ? s.avg_judge.toFixed(3) : '-'}</td>
                         {s.rank_counts.map((c, i) => (
                           <td key={i}>{c}</td>
@@ -151,8 +153,8 @@ export function ComparisonPanel({
                 </table>
               </div>
               <p className="small-muted" style={{ marginTop: 10 }}>
-                These are pipeline-measured stats only (consistency across runs, independent judge score) - there's
-                no external "correct answer" baked in, so no model is labeled best/worst here.
+                These are pipeline-measured stats only ({repeats > 1 ? 'consistency across runs, ' : ''}independent
+                judge score) - there's no external "correct answer" baked in, so no model is labeled best/worst here.
               </p>
 
               <SectionLabel>Per-alert comparison</SectionLabel>

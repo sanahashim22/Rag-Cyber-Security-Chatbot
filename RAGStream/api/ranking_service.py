@@ -476,7 +476,7 @@ def build_comparison_excel(entries: List[Dict], results: Dict[str, List[Dict]]) 
 
     header_row = summary_title_row + 1
     headers2 = [
-        "Model", "Consistent (3/3)", "Consistency %", "Avg Judge Score",
+        "Model", f"Consistent (across {repeats} run(s))", "Consistency %", "Avg Judge Score",
         "Rank 1-5 distribution", "",
     ]
     for i, h in enumerate(headers2, start=1):
@@ -493,11 +493,19 @@ def build_comparison_excel(entries: List[Dict], results: Dict[str, List[Dict]]) 
     for mi, model in enumerate(RANKING_MODELS):
         stats = aggregate_stats(results[model])
         r = data_start + mi
-        consistency_pct = 100.0 * stats["consistent_count"] / stats["total_alerts"] if stats["total_alerts"] else 0.0
+        # With 1 run there's nothing to be consistent across - it's
+        # trivially always every alert, so that's not meaningful to report.
+        if repeats > 1:
+            consistency_pct = 100.0 * stats["consistent_count"] / stats["total_alerts"] if stats["total_alerts"] else 0.0
+            consistent_str = f'{stats["consistent_count"]}/{stats["total_alerts"]}'
+            consistency_pct_str = f"{consistency_pct:.1f}%"
+        else:
+            consistent_str = "N/A (1 run)"
+            consistency_pct_str = "N/A"
         values = [
             model,
-            f'{stats["consistent_count"]}/{stats["total_alerts"]}',
-            f"{consistency_pct:.1f}%",
+            consistent_str,
+            consistency_pct_str,
             f'{stats["avg_judge"]:.3f}' if stats["avg_judge"] is not None else "-",
             "/".join(str(x) for x in stats["rank_counts"]),
             "",
