@@ -47,41 +47,47 @@ export function ComparisonPanel({
 
   return (
     <div>
-      <div style={{ marginBottom: 22 }}>
+      <div className="panel options-card">
+        <div className="info-card-title">⚙️ Comparison options</div>
+
         <button className="btn-primary" onClick={() => start.mutate()} disabled={job?.status === 'running' || start.isPending}>
           ▶ Run all 4 models
         </button>
-      </div>
 
-      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 24 }}>
-        <label className="checkbox-row">
-          <input type="checkbox" checked={runJudge} onChange={(e) => setRunJudge(e.target.checked)} /> Judge LLM
-        </label>
-        <label className="checkbox-row">
-          <input type="checkbox" checked={runMismatch} onChange={(e) => setRunMismatch(e.target.checked)} /> Mismatch
-          justification
-        </label>
-        <label className="checkbox-row">
-          <input type="checkbox" checked={runCorrelation} onChange={(e) => setRunCorrelation(e.target.checked)} />{' '}
-          Combined/correlated analysis
-        </label>
-      </div>
+        <div>
+          <span className="field-label">Optional extra checks</span>
+          <div className="checkbox-group">
+            <label className={`toggle-chip ${runJudge ? 'checked' : ''}`}>
+              <input type="checkbox" checked={runJudge} onChange={(e) => setRunJudge(e.target.checked)} />
+              <span className="chip-dot" /> Judge LLM
+            </label>
+            <label className={`toggle-chip ${runMismatch ? 'checked' : ''}`}>
+              <input type="checkbox" checked={runMismatch} onChange={(e) => setRunMismatch(e.target.checked)} />
+              <span className="chip-dot" /> Mismatch justification
+            </label>
+            <label className={`toggle-chip ${runCorrelation ? 'checked' : ''}`}>
+              <input type="checkbox" checked={runCorrelation} onChange={(e) => setRunCorrelation(e.target.checked)} />
+              <span className="chip-dot" /> Combined/correlated analysis
+            </label>
+          </div>
+        </div>
 
-      <div style={{ marginBottom: 24 }}>
-        <label>
-          <span className="field-label">Runs per alert</span>
-          <input
-            type="number"
-            min={1}
-            value={repeatsText}
-            onChange={(e) => setRepeatsText(e.target.value)}
-            style={{ width: 120 }}
-          />
-        </label>
-        <p className="small-muted" style={{ marginTop: 6 }}>
-          How many times to re-rank each alert with each model, to check consistency. Each run is a separate LLM
-          call, so more runs takes proportionally longer.
-        </p>
+        <div>
+          <label>
+            <span className="field-label">Runs per alert</span>
+            <input
+              type="number"
+              min={1}
+              value={repeatsText}
+              onChange={(e) => setRepeatsText(e.target.value)}
+              style={{ width: 120 }}
+            />
+          </label>
+          <p className="small-muted" style={{ marginTop: 6 }}>
+            How many times to re-rank each alert with each model, to check consistency. Each run is a separate LLM
+            call, so more runs takes proportionally longer.
+          </p>
+        </div>
       </div>
 
       {job?.status === 'running' && (
