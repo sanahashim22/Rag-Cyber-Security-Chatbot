@@ -73,45 +73,57 @@ export function AlertTable({ rows }: { rows: AlertTableRow[] }) {
   )
 }
 
-export function CorrelationSection({ correlation }: { correlation: CorrelationResult | null }) {
+export function CorrelationSection({
+  correlation,
+  showHeading = true,
+}: {
+  correlation: CorrelationResult | null
+  showHeading?: boolean
+}) {
   if (correlation === null) return null
   const groups = correlation.groups ?? []
   return (
     <>
-      <SectionLabel>Combined / correlated alert groups</SectionLabel>
-      <p className="small-muted">
-        Looks at ALL of this batch's alerts together (not one at a time) and lets the model suggest groups of
-        alert_ids that collectively tell a more dangerous story than any one alert alone. This is entirely a 🔗
-        AI-suggested judgment call based on the alerts' own content, not a code-guaranteed match.
-      </p>
-      {groups.length === 0 ? (
-        <Callout kind="info">No correlated alert groups found in this batch.</Callout>
-      ) : (
-        <div className="table-scroll">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Status</th>
-                <th>Alert IDs</th>
-                <th>Combined Rank</th>
-                <th style={{ width: '45%' }}>Combined Event</th>
-              </tr>
-            </thead>
-            <tbody>
-              {groups.map((g, i) => (
-                <tr key={i}>
-                  <td>🔗 AI-suggested</td>
-                  <td>{g.alert_ids.join(', ')}</td>
-                  <td style={{ background: severityRankColor(g.combined_severity_rank ?? undefined) + '26', fontWeight: 700 }}>
-                    {g.combined_severity_rank ?? '-'}
-                  </td>
-                  <td>{g.event_description}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {showHeading && (
+        <>
+          <SectionLabel>Combined / correlated alert groups</SectionLabel>
+          <p className="small-muted">
+            Looks at ALL of this batch's alerts together (not one at a time) and lets the model suggest groups of
+            alert_ids that collectively tell a more dangerous story than any one alert alone. This is entirely a 🔗
+            AI-suggested judgment call based on the alerts' own content, not a code-guaranteed match.
+          </p>
+        </>
       )}
+      <div style={{ marginTop: 14 }}>
+        {groups.length === 0 ? (
+          <Callout kind="info">No correlated alert groups found in this batch.</Callout>
+        ) : (
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Alert IDs</th>
+                  <th>Combined Rank</th>
+                  <th style={{ width: '45%' }}>Combined Event</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groups.map((g, i) => (
+                  <tr key={i}>
+                    <td>🔗 AI-suggested</td>
+                    <td>{g.alert_ids.join(', ')}</td>
+                    <td style={{ background: severityRankColor(g.combined_severity_rank ?? undefined) + '26', fontWeight: 700 }}>
+                      {g.combined_severity_rank ?? '-'}
+                    </td>
+                    <td>{g.event_description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </>
   )
 }

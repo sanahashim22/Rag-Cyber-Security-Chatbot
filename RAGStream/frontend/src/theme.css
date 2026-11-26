@@ -234,7 +234,7 @@ table.data-table tr:last-child td { border-bottom: none; }
 table.data-table tr:hover td { background: rgba(255, 255, 255, 0.025); }
 table.data-table tr:nth-child(even) td { background: rgba(255, 255, 255, 0.012); }
 
-.model-cell { display: flex; flex-direction: column; gap: 2px; }
+.model-cell { display: flex; flex-direction: column; gap: 6px; padding: 2px 0; }
 .model-cell .rank-badge { font-size: 15px; font-weight: 800; }
 .model-cell .model-detail { color: var(--text-muted); font-size: 12.5px; }
 

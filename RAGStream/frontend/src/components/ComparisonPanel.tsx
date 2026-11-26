@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { api, downloadBase64 } from '../api/client'
 import type { AlertEntry } from '../api/types'
-import { Callout, ProgressBar, Tabs, severityRankColor } from './Common'
-import { ReasoningView, ReportView, TimingView } from './RankingShared'
+import { Callout, ProgressBar, SectionLabel, Tabs, severityRankColor } from './Common'
+import { CorrelationSection, ReasoningView, ReportView, TimingView } from './RankingShared'
 
 export function ComparisonPanel({
   entries,
@@ -22,6 +22,7 @@ export function ComparisonPanel({
   const [jobId, setJobId] = useState<string | null>(null)
   const [tab, setTab] = useState('ranking')
   const [activeModel, setActiveModel] = useState(models[0])
+  const [correlationModel, setCorrelationModel] = useState(models[0])
 
   const start = useMutation({
     mutationFn: () =>
@@ -118,6 +119,7 @@ export function ComparisonPanel({
 
           {tab === 'ranking' && (
             <>
+              <SectionLabel>Model summary</SectionLabel>
               <div className="table-scroll">
                 <table className="data-table">
                   <thead>
@@ -148,7 +150,12 @@ export function ComparisonPanel({
                   </tbody>
                 </table>
               </div>
+              <p className="small-muted" style={{ marginTop: 10 }}>
+                These are pipeline-measured stats only (consistency across runs, independent judge score) - there's
+                no external "correct answer" baked in, so no model is labeled best/worst here.
+              </p>
 
+              <SectionLabel>Per-alert comparison</SectionLabel>
               <div className="table-scroll">
                 <table className="data-table">
                   <thead>
@@ -188,14 +195,32 @@ export function ComparisonPanel({
                   </tbody>
                 </table>
               </div>
+              <p className="small-muted" style={{ marginTop: 10 }}>
+                Each model's colored column is its majority rank across {repeats} run(s); "runs" shows the raw
+                values and "judge" the average judge score.
+              </p>
 
-              <div style={{ marginTop: 12 }}>
+              <div style={{ marginTop: 16 }}>
                 <button
                   onClick={() => downloadBase64('model_comparison.xlsx', result.excel_base64, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}
                 >
                   ⬇ Download comparison workbook (.xlsx)
                 </button>
               </div>
+
+              {models.some((m) => result.per_model[m].correlation !== null) && (
+                <>
+                  <SectionLabel>Combined / correlated alert groups (per model)</SectionLabel>
+                  <p className="small-muted">
+                    Each model gets its own extra pass looking at the whole batch together and suggesting alert_id
+                    groups that collectively look more dangerous than any single alert alone - entirely a 🔗
+                    AI-suggested judgment call, shown separately per model since both the grouping and the combined
+                    rank can differ between models.
+                  </p>
+                  <ModelTabs models={models} active={correlationModel} onChange={setCorrelationModel} />
+                  <CorrelationSection correlation={result.per_model[correlationModel].correlation} showHeading={false} />
+                </>
+              )}
             </>
           )}
 
@@ -240,7 +265,7 @@ export function ComparisonPanel({
 
 function ModelTabs({ models, active, onChange }: { models: string[]; active: string; onChange: (m: string) => void }) {
   return (
-    <div className="tabs-row">
+    <div className="tabs-row" style={{ marginTop: 18 }}>
       {models.map((m) => (
         <button key={m} className={`tab-btn ${active === m ? 'active' : ''}`} onClick={() => onChange(m)} type="button">
           {m}
