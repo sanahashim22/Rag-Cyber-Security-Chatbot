@@ -33,8 +33,20 @@ export function SeverityLegend({ meanings }: { meanings: Record<string, string> 
   )
 }
 
-export function Callout({ kind, children }: { kind: 'info' | 'warn' | 'error' | 'success'; children: React.ReactNode }) {
-  return <div className={`callout callout-${kind}`}>{children}</div>
+export function Callout({
+  kind,
+  children,
+  style,
+}: {
+  kind: 'info' | 'warn' | 'error' | 'success'
+  children: React.ReactNode
+  style?: React.CSSProperties
+}) {
+  return (
+    <div className={`callout callout-${kind}`} style={style}>
+      {children}
+    </div>
+  )
 }
 
 export function ProgressBar({ current, total, label }: { current: number; total: number; label: string }) {

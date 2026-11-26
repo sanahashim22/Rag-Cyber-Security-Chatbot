@@ -195,15 +195,19 @@ export function RunDetailCard({ index, run }: { index: number; run: RunDetail })
       <div className="run-card-head">
         {SEVERITY_ICONS[rank] ?? ''} Run {index} — {rank} · judge score {run.judge_score != null ? run.judge_score.toFixed(2) : '-'}
       </div>
-      <p>{run.model_justification || '(no justification returned)'}</p>
+      <p style={{ marginTop: 10, marginBottom: 10 }}>{run.model_justification || '(no justification returned)'}</p>
       {run.mismatch_with_snort && run.mismatch_justification && (
-        <Callout kind="warn">
+        <Callout kind="warn" style={{ marginBottom: 10 }}>
           ⚠️ Disagrees with Snort priority
           {run.expected_new_rank_range ? ` (Snort implies rank ${run.expected_new_rank_range[0]}-${run.expected_new_rank_range[1]})` : ''}:{' '}
           {run.mismatch_justification}
         </Callout>
       )}
-      {run.judge_reasoning && <p className="small-muted">🧑⚖️ Judge reasoning: {run.judge_reasoning}</p>}
+      {run.judge_reasoning && (
+        <p className="small-muted" style={{ marginTop: 10 }}>
+          🧑⚖️ Judge reasoning: {run.judge_reasoning}
+        </p>
+      )}
     </div>
   )
 }
