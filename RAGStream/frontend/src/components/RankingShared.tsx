@@ -1,6 +1,6 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, LabelList, Tooltip, XAxis, YAxis } from 'recharts'
 import type {
   AggregateStats,
   AlertTableRow,
@@ -422,12 +422,20 @@ export function TimingView({
 
       <SectionLabel>Time spent per stage (summed across all alerts & runs)</SectionLabel>
       <div className="chart-box">
-        <BarChart width={700} height={Math.max(160, chartData.length * 40)} data={chartData} layout="vertical">
+        <BarChart
+          width={700}
+          height={Math.max(160, chartData.length * 40)}
+          data={chartData}
+          layout="vertical"
+          margin={{ top: 5, right: 50, bottom: 5, left: 5 }}
+        >
           <CartesianGrid strokeDasharray="3 3" stroke="#27354a" />
           <XAxis type="number" stroke="#8b949e" />
           <YAxis type="category" dataKey="stage" width={220} stroke="#8b949e" />
           <Tooltip contentStyle={{ background: '#111826', border: '1px solid #27354a' }} />
-          <Bar dataKey="seconds" fill={SEVERITY_COLORS[1]} />
+          <Bar dataKey="seconds" fill={SEVERITY_COLORS[1]}>
+            <LabelList dataKey="seconds" position="right" formatter={(v: number) => `${v}s`} fill="#c9d1d9" fontSize={12} />
+          </Bar>
         </BarChart>
       </div>
 
