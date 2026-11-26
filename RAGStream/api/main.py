@@ -37,6 +37,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def _static_cache_control(request, call_next):
+    """index.html references the current build's content-hashed JS/CSS
+    filenames (e.g. index-<hash>.js), so a NEW build always has a NEW
+    filename - those hashed files are safe to cache forever. index.html
+    itself is not: with no explicit header, browsers apply heuristic
+    caching to it and can keep serving a stale copy (still pointing at an
+    old build's hash) for hours after a rebuild, which looks exactly like
+    "my fix isn't showing up" even after a hard refresh. So index.html (and
+    any other non-API, non-asset path - the SPA fallback) must always
+    revalidate, while /assets/* gets cached indefinitely."""
+    response = await call_next(request)
+    path = request.url.path
+    if not path.startswith("/api/"):
+        if path.startswith("/assets/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 app.include_router(routes_alerts.router)
 app.include_router(routes_intel.router)
 app.include_router(routes_ranking.router)
