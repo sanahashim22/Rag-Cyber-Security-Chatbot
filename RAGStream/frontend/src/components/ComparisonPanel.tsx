@@ -212,7 +212,7 @@ export function ComparisonPanel({
                 </button>
               </div>
 
-              {models.some((m) => result.per_model[m].correlation !== null) && (
+              {models.some((m) => result.per_model[m].correlation !== null) ? (
                 <>
                   <SectionLabel>Combined / correlated alert groups (per model)</SectionLabel>
                   <p className="small-muted">
@@ -224,6 +224,16 @@ export function ComparisonPanel({
                   <ModelTabs models={models} active={correlationModel} onChange={setCorrelationModel} />
                   <CorrelationSection correlation={result.per_model[correlationModel].correlation} showHeading={false} />
                 </>
+              ) : (
+                runCorrelation &&
+                entries.length <= 1 && (
+                  <>
+                    <SectionLabel>Combined / correlated alert groups (per model)</SectionLabel>
+                    <Callout kind="info">
+                      Needs 2 or more alerts in the batch to look for - skipped for this single-alert run.
+                    </Callout>
+                  </>
+                )
               )}
             </>
           )}

@@ -142,6 +142,8 @@ export function SingleModelPanel({
               correlation={result.correlation}
               judgeModel={meta?.judge_model ?? 'gemma2:2b'}
               runJudge={runJudge}
+              runCorrelation={runCorrelation}
+              alertCount={entries.length}
             />
           )}
           {tab === 'reasoning' && <ReasoningView processed={result.processed} />}

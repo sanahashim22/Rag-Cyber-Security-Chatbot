@@ -134,12 +134,16 @@ export function RankingOverview({
   correlation,
   judgeModel,
   runJudge,
+  runCorrelation,
+  alertCount,
 }: {
   stats: AggregateStats
   alertTable: AlertTableRow[]
   correlation: CorrelationResult | null
   judgeModel: string
   runJudge: boolean
+  runCorrelation?: boolean
+  alertCount?: number
 }) {
   const distData = [1, 2, 3, 4, 5].map((r) => ({ rank: String(r), count: stats.rank_counts[r - 1] }))
 
@@ -166,7 +170,19 @@ export function RankingOverview({
       <SectionLabel>Per-alert ranking</SectionLabel>
       <AlertTable rows={alertTable} />
 
-      <CorrelationSection correlation={correlation} />
+      {correlation !== null ? (
+        <CorrelationSection correlation={correlation} />
+      ) : (
+        runCorrelation &&
+        (alertCount ?? 0) <= 1 && (
+          <>
+            <SectionLabel>Combined / correlated alert groups</SectionLabel>
+            <Callout kind="info">
+              Needs 2 or more alerts in the batch to look for - skipped for this single-alert run.
+            </Callout>
+          </>
+        )
+      )}
     </>
   )
 }
