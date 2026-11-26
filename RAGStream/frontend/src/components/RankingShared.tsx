@@ -133,13 +133,6 @@ export function RankingOverview({
 
   return (
     <>
-      <MetricGrid>
-        <MetricCard label="Alerts Ranked" value={stats.total_alerts} accent="blue" />
-        <MetricCard label="Consistent (3/3)" value={`${stats.consistent_count}/${stats.total_alerts}`} accent="green" />
-        <MetricCard label="Avg Judge Score" value={stats.avg_judge != null ? stats.avg_judge.toFixed(2) : '-'} accent="purple" />
-        <MetricCard label="Judge Model" value={runJudge ? judgeModel : 'Skipped'} accent="red" />
-      </MetricGrid>
-
       <SectionLabel>Severity rank distribution (all runs)</SectionLabel>
       <div className="chart-box">
         <BarChart width={600} height={240} data={distData}>
@@ -150,6 +143,13 @@ export function RankingOverview({
           <Bar dataKey="count" fill={SEVERITY_COLORS[1]} name="# judgments" />
         </BarChart>
       </div>
+
+      <MetricGrid>
+        <MetricCard label="Alerts Ranked" value={stats.total_alerts} accent="blue" />
+        <MetricCard label="Consistent (3/3)" value={`${stats.consistent_count}/${stats.total_alerts}`} accent="green" />
+        <MetricCard label="Avg Judge Score" value={stats.avg_judge != null ? stats.avg_judge.toFixed(2) : '-'} accent="purple" />
+        <MetricCard label="Judge Model" value={runJudge ? judgeModel : 'Skipped'} accent="red" />
+      </MetricGrid>
 
       <SectionLabel>Per-alert ranking</SectionLabel>
       <AlertTable rows={alertTable} />
@@ -409,17 +409,6 @@ export function TimingView({
 
   return (
     <>
-      <MetricGrid>
-        <MetricCard label="Total batch time" value={formatDuration(totalDuration)} accent="blue" />
-        <MetricCard label="Avg time / alert" value={formatDuration(avgDuration)} accent="purple" />
-        <MetricCard label="Alerts timed" value={processed.length} accent="green" />
-        <MetricCard
-          label="Combined/correlated check"
-          value={correlation !== null ? formatDuration(corrTotal) : 'Skipped'}
-          accent="red"
-        />
-      </MetricGrid>
-
       <SectionLabel>Time spent per stage (summed across all alerts & runs)</SectionLabel>
       <div className="chart-box">
         <BarChart
@@ -438,6 +427,17 @@ export function TimingView({
           </Bar>
         </BarChart>
       </div>
+
+      <MetricGrid>
+        <MetricCard label="Total batch time" value={formatDuration(totalDuration)} accent="blue" />
+        <MetricCard label="Avg time / alert" value={formatDuration(avgDuration)} accent="purple" />
+        <MetricCard label="Alerts timed" value={processed.length} accent="green" />
+        <MetricCard
+          label="Combined/correlated check"
+          value={correlation !== null ? formatDuration(corrTotal) : 'Skipped'}
+          accent="red"
+        />
+      </MetricGrid>
 
       {correlation?.timings && correlation.timings.length > 0 && (
         <>
