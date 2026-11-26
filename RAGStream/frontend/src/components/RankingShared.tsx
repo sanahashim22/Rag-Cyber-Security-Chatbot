@@ -270,7 +270,7 @@ export function RunDetailCard({ index, run }: { index: number; run: RunDetail })
 
 export function ReasoningView({ processed }: { processed: ProcessedAlert[] }) {
   return (
-    <>
+    <div style={{ marginTop: 18 }}>
       {processed.map((item, i) => {
         const alert = item.alert_entry.alert ?? {}
         const majority = modeRank(item.ranks)
@@ -288,7 +288,7 @@ export function ReasoningView({ processed }: { processed: ProcessedAlert[] }) {
           </Expander>
         )
       })}
-    </>
+    </div>
   )
 }
 
