@@ -130,7 +130,12 @@ export default function App() {
                   ]}
                 />
 
-                {mainTab === 'single' ? (
+                {/* Both panels stay mounted (just hidden) rather than being
+                    swapped in/out - each one's running job is tracked in its
+                    own local state, so unmounting it when you switch tabs
+                    would silently lose track of a job that's still running
+                    on the backend. */}
+                <div style={{ display: mainTab === 'single' ? 'block' : 'none' }}>
                   <SingleModelPanel
                     entries={rankableEntries}
                     models={modelsInfo.models}
@@ -138,9 +143,10 @@ export default function App() {
                     onBusyChange={setSingleBusy}
                     onModelChange={setChatModel}
                   />
-                ) : (
+                </div>
+                <div style={{ display: mainTab === 'compare' ? 'block' : 'none' }}>
                   <ComparisonPanel entries={rankableEntries} models={modelsInfo.models} onBusyChange={setCompareBusy} />
-                )}
+                </div>
 
                 <ChatWidget model={chatModel} busy={anyBusy} />
               </>
