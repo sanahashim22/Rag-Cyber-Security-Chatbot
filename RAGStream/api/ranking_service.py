@@ -211,6 +211,49 @@ def correlation_timing_total(correlation: Optional[Dict]) -> float:
     return sum(t.get("duration_sec", 0.0) for t in (correlation.get("timings") or []))
 
 
+def _attempt_breakdown_text(a: Dict) -> Optional[str]:
+    """Ollama's own load/prefill/decode split for one LLM call attempt (see
+    _ollama_breakdown in snort_ranking.py) - already captured on every
+    attempt, just never rendered into the text report before. Returns None
+    for an attempt that errored before getting any response back (so there's
+    nothing to report)."""
+    parts = []
+    if a.get("model_load_sec"):
+        parts.append(f"model load {format_duration(a['model_load_sec'])}")
+    if a.get("prompt_eval_sec") is not None:
+        tok = f"{a['prompt_tokens']} tok, " if a.get("prompt_tokens") is not None else ""
+        parts.append(f"prompt (prefill) {tok}{format_duration(a['prompt_eval_sec'])}")
+    if a.get("response_eval_sec") is not None:
+        tok = f"{a['response_tokens']} tok, " if a.get("response_tokens") is not None else ""
+        parts.append(f"response (decode) {tok}{format_duration(a['response_eval_sec'])}")
+    return " | ".join(parts) if parts else None
+
+
+def _iter_attempts(processed: List[Dict], correlation: Optional[Dict] = None):
+    for item in processed:
+        for stage_list in (item.get("timings") or {}).get("runs", []):
+            for s in stage_list:
+                yield from (s.get("attempts") or [])
+    for t in (correlation or {}).get("timings") or []:
+        yield from (t.get("attempts") or [])
+
+
+def ollama_breakdown_totals(processed: List[Dict], correlation: Optional[Dict] = None) -> Dict[str, float]:
+    """Sums model-load/prefill/decode time (+ token counts) across every LLM
+    call attempt in a batch - the headline numbers for comparing a cold vs.
+    warm model, or a CPU vs. GPU run, that the per-attempt detail lines alone
+    don't surface without manually adding them up."""
+    totals = {"model_load_sec": 0.0, "prompt_eval_sec": 0.0, "response_eval_sec": 0.0,
+              "prompt_tokens": 0, "response_tokens": 0}
+    for a in _iter_attempts(processed, correlation):
+        totals["model_load_sec"] += a.get("model_load_sec") or 0.0
+        totals["prompt_eval_sec"] += a.get("prompt_eval_sec") or 0.0
+        totals["response_eval_sec"] += a.get("response_eval_sec") or 0.0
+        totals["prompt_tokens"] += a.get("prompt_tokens") or 0
+        totals["response_tokens"] += a.get("response_tokens") or 0
+    return totals
+
+
 def merge_correlation_into_totals(totals: Dict[str, float], correlation: Optional[Dict]) -> Dict[str, float]:
     for t in (correlation or {}).get("timings") or []:
         totals[t["stage"]] = totals.get(t["stage"], 0.0) + t["duration_sec"]
@@ -252,6 +295,9 @@ def _append_alert_timing_text(lines: List[str], item: Dict) -> None:
                         f"        {round_part}attempt {a['attempt']}: {a['start_ts']} -> {a['end_ts']} "
                         f"({format_duration(a['duration_sec'])}) - {a['outcome']}"
                     )
+                    breakdown = _attempt_breakdown_text(a)
+                    if breakdown:
+                        lines.append(f"          {breakdown}")
     lines.append("")
 
 
@@ -272,6 +318,9 @@ def _append_correlation_timing_text(lines: List[str], correlation: Optional[Dict
                     f"      {round_part}attempt {a['attempt']}: {a['start_ts']} -> {a['end_ts']} "
                     f"({format_duration(a['duration_sec'])}) - {a['outcome']}"
                 )
+                breakdown = _attempt_breakdown_text(a)
+                if breakdown:
+                    lines.append(f"        {breakdown}")
     lines.append("")
 
 
@@ -281,6 +330,7 @@ def build_timing_report_text(processed: List[Dict], label: str, correlation: Opt
     total_duration = sum(alert_durations) + corr_total
     avg_duration = (sum(alert_durations) / len(processed)) if processed else 0.0
     totals = merge_correlation_into_totals(timing_stage_totals(processed), correlation)
+    load_totals = ollama_breakdown_totals(processed, correlation)
 
     lines = [
         f"Timing Report - {label}",
@@ -297,6 +347,17 @@ def build_timing_report_text(processed: List[Dict], label: str, correlation: Opt
     for s in STAGE_ORDER:
         if s in totals:
             lines.append(f"  {STAGE_LABELS[s]:<32} {format_duration(totals[s])}")
+    lines.append("")
+    lines.append("MODEL LOAD / PREFILL / DECODE (summed across every LLM call attempt)")
+    lines.append(f"  Model load time:     {format_duration(load_totals['model_load_sec'])}")
+    lines.append(
+        f"  Prompt processing:   {format_duration(load_totals['prompt_eval_sec'])} "
+        f"({load_totals['prompt_tokens']} tokens)"
+    )
+    lines.append(
+        f"  Answer generation:   {format_duration(load_totals['response_eval_sec'])} "
+        f"({load_totals['response_tokens']} tokens)"
+    )
     lines.append("")
     _append_correlation_timing_text(lines, correlation)
     lines.append("PER-ALERT TIMING DETAIL")
@@ -323,6 +384,7 @@ def build_comparison_timing_report_text(entries: List[Dict], results: Dict[str, 
         totals = merge_correlation_into_totals(timing_stage_totals(processed), correlation)
         total_duration = sum(item.get("timings", {}).get("alert_duration_sec", 0.0) for item in processed) + corr_total
         avg_duration = (total_duration / len(processed)) if processed else 0.0
+        load_totals = ollama_breakdown_totals(processed, correlation)
         lines.append(f"  {model}:")
         lines.append(f"    Total time: {format_duration(total_duration)}")
         lines.append(f"    Avg time/alert: {format_duration(avg_duration)}")
@@ -331,6 +393,15 @@ def build_comparison_timing_report_text(entries: List[Dict], results: Dict[str, 
         lines.append(f"    Mismatch LLM: {format_duration(totals.get('mismatch_llm_call', 0.0))}")
         lines.append(f"    Judge LLM: {format_duration(totals.get('judge_llm_call', 0.0))}")
         lines.append(f"    Combined/correlated check: {format_duration(corr_total)}")
+        lines.append(f"    Model load time: {format_duration(load_totals['model_load_sec'])}")
+        lines.append(
+            f"    Prompt processing: {format_duration(load_totals['prompt_eval_sec'])} "
+            f"({load_totals['prompt_tokens']} tokens)"
+        )
+        lines.append(
+            f"    Answer generation: {format_duration(load_totals['response_eval_sec'])} "
+            f"({load_totals['response_tokens']} tokens)"
+        )
     lines.append("")
     lines.append("PER-ALERT TIMING DETAIL (all 4 models)")
     lines.append("=" * 70)
