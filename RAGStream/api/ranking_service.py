@@ -27,6 +27,13 @@ import snort_ranking
 
 RANKING_MODELS = ["llama3.2", "qwen2.5:1.5b", "phi4-mini", "gemma4:e2b"]
 
+# Selectable only in the Single-Model dropdown, not in the fixed 4-Model
+# Comparison sweep (which always runs exactly RANKING_MODELS) - gpt-oss:20b
+# is heavier/slower, so it's opt-in per alert batch rather than run on every
+# comparison automatically.
+SINGLE_MODEL_EXTRA_MODELS = ["gpt-oss:20b"]
+SINGLE_MODEL_MODELS = RANKING_MODELS + SINGLE_MODEL_EXTRA_MODELS
+
 # Alerts beyond this count require the frontend to ask "how many do you want
 # to run" instead of silently ranking everything - same threshold as
 # dashboard_app.py's AUTO_RUN_LIMIT.

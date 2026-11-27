@@ -145,7 +145,7 @@ export default function App() {
                   />
                 </div>
                 <div style={{ display: mainTab === 'compare' ? 'block' : 'none' }}>
-                  <ComparisonPanel entries={rankableEntries} models={modelsInfo.models} onBusyChange={setCompareBusy} />
+                  <ComparisonPanel entries={rankableEntries} models={modelsInfo.comparison_models} onBusyChange={setCompareBusy} />
                 </div>
 
                 <ChatWidget model={chatModel} busy={anyBusy} />

@@ -14,7 +14,11 @@ router = APIRouter(prefix="/api/ranking", tags=["ranking"])
 
 @router.get("/models")
 def models():
-    return {"models": ranking_service.RANKING_MODELS, "auto_run_limit": ranking_service.AUTO_RUN_LIMIT}
+    return {
+        "models": ranking_service.SINGLE_MODEL_MODELS,
+        "comparison_models": ranking_service.RANKING_MODELS,
+        "auto_run_limit": ranking_service.AUTO_RUN_LIMIT,
+    }
 
 
 def _single_model_result(entries: List[Dict], model: str, run_judge: bool, run_mismatch: bool,

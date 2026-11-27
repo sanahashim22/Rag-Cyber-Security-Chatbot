@@ -49,7 +49,8 @@ export const api = {
     req<{ job_id: string }>('/intel/download', { method: 'POST', body: JSON.stringify(body) }),
   intelDownloadStatus: (jobId: string) => req<JobStatus<{ ok: boolean; message: string }>>(`/intel/download/jobs/${jobId}`),
 
-  models: () => req<{ models: string[]; auto_run_limit: number }>('/ranking/models'),
+  models: () =>
+    req<{ models: string[]; comparison_models: string[]; auto_run_limit: number }>('/ranking/models'),
   runRanking: (body: {
     entries: AlertEntry[]
     model: string
